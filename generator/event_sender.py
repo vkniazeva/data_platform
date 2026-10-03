@@ -121,8 +121,6 @@ def _generate_regional_event(message_number: int, event_type: str) -> dict:
     }
 
 
-
-
 def generate_kafka_event(event_type: str, message_number: int) -> dict:
     """Generate Kafka event wrapper with headers and body"""
     if event_type == "trade_execution_report":
