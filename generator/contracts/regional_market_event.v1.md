@@ -5,17 +5,18 @@ data type: semistructured
 ## Kafka record
 
 topic: market.events
-key: execution_id
+key: metal_region
 value: JSON, UTF-8 encoded
 
 ### Kafka Headers
 
-| Header           | Required | Example                        | Description                                 |
-|------------------|----------|--------------------------------|---------------------------------------------|
-| `event_type`     | yes      | `regional_market_observation`  | Event type; must equal `value.event_type`   |
-| `schema_version` | yes      | `1`                            | Must equal `value.schema_version`           |
-| `source`         | yes      | `synthetic_regional_market`    | Event producer                              |
-| `content_type`   | yes      | `application/json`             | Kafka value format                          |
+| Header               | Required | Example                     | Description                               |
+|----------------------|----------|-----------------------------|-------------------------------------------|
+| `event_type`         | yes      | `regional_price_quote`      | Event type; must equal `value.event_type` |
+| `schema_version`     | yes      | `1`                         | Must equal `value.schema_version`         |
+| `source`             | yes      | `synthetic_regional_market` | Event producer                            |
+| `content_type`       | yes      | `application/json`          | Kafka value format                        |
+| `idempotency_key`    | yes      | execution_id                | concreate message id   (i.e. CA_EU)       |
 
 ### Event value
 

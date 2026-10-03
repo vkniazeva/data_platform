@@ -88,5 +88,3 @@ def generate_stock_request(request_number: int) -> dict:
         "headers": headers,
         "body": _generate_stock_request_body(key),
     }
-
-print(generate_stock_request(1))

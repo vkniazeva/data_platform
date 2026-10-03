@@ -19,7 +19,7 @@ from datetime import datetime, timezone, timedelta
 from generator.reference import METALS, REGIONS, WAREHOUSES
 
 
-def _generate_fix_body(message_number:int) -> str:
+def _generate_fix_body(message_number:int) -> tuple(str, str):
 
     now = datetime.now(timezone.utc)
     event_timestamp = now.strftime("%Y%m%d-%H:%M:%S.%f")[:-3]
@@ -39,7 +39,7 @@ def _generate_fix_body(message_number:int) -> str:
     fields = [
         "8=FIX.4.4",
         "35=8",
-        f"34={message_number + 1}",
+        f"34={message_number}",
         f"52={event_timestamp}",
         f"17=EX-{message_number:06d}",
         f"55={metal_id}",
@@ -49,19 +49,21 @@ def _generate_fix_body(message_number:int) -> str:
         f"60={deal_timestamp}"
     ]
 
-    return "|".join(fields) + "|"
+    return "|".join(fields) + "|", metal_id
 
 def _generate_fix_event(message_number: int, event_type: str) -> dict:
     event_id = f"EX-{message_number:06d}"
+    value, metal_id = _generate_fix_body(message_number)
 
     return {
-        "key": event_id,
-        "value": _generate_fix_body(message_number),
+        "key": metal_id,
+        "value": value,
         "headers": {
             "event_type": event_type,
             "schema_version": "1",
             "source": "synthetic_fix",
-            "content_type": "text/plain"
+            "content_type": "text/plain",
+            "idempotency_key": event_id
         }
     }
 
@@ -110,13 +112,14 @@ def _generate_regional_event(message_number: int, event_type: str) -> dict:
     }
 
     return {
-        "key": event_id,
+        "key": f"{metal_id}_{region}",
         "value": common_fix_data,
         "headers": {
             "event_type": event_type,
             "schema_version": "1",
             "source": "synthetic_regional_market",
-            "content_type": "application/json"
+            "content_type": "application/json",
+            "idempotency_key": event_id
         }
     }
 

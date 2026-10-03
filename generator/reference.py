@@ -24,13 +24,13 @@ REGIONS = {
 }
 
 BARGES = {
-    "BRG_001": {"name": "barge_001", "hosting_port": "WH_RTM"},
-    "BRG_002": {"name": "barge_002", "hosting_port": "WH_PUS"},
-    "BRG_003": {"name": "barge_003", "hosting_port": "WH_SNG"},
-    "BRG_004": {"name": "barge_004", "hosting_port": "WH_DBX"},
-    "BRG_005": {"name": "barge_005", "hosting_port": "WH_DBX"},
-    "BRG_006": {"name": "barge_006", "hosting_port": "WH_ANR"},
-    "BRG_007": {"name": "barge_007", "hosting_port": "WH_SNG"},
-    "BRG_008": {"name": "barge_008", "hosting_port": "WH_SNG"},
+    "BRG_001": {"name": "barge_001", "hosting_port": "WH_RTM", "target_port": "WH_SNG", "estimated_travel_days": 29.5},
+    "BRG_002": {"name": "barge_002", "hosting_port": "WH_PUS", "target_port": "WH_ANR", "estimated_travel_days": 39.0},
+    "BRG_003": {"name": "barge_003", "hosting_port": "WH_SNG", "target_port": "WH_RTM", "estimated_travel_days": 28.5},
+    "BRG_004": {"name": "barge_004", "hosting_port": "WH_DBX", "target_port": "WH_ANR", "estimated_travel_days": 20.0},
+    "BRG_005": {"name": "barge_005", "hosting_port": "WH_DBX", "target_port": "WH_PUS", "estimated_travel_days": 21.5},
+    "BRG_006": {"name": "barge_006", "hosting_port": "WH_ANR", "target_port": "WH_PUS", "estimated_travel_days": 39.0},
+    "BRG_007": {"name": "barge_007", "hosting_port": "WH_SNG", "target_port": "WH_DBX", "estimated_travel_days": 14.0},
+    "BRG_008": {"name": "barge_008", "hosting_port": "WH_SNG", "target_port": "WH_RTM", "estimated_travel_days": 29.5},
 }
 

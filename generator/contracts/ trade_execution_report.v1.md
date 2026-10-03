@@ -4,13 +4,14 @@ Topic: market.fix.raw
 
 ## Kafka record
 
-- Key: FIX tag 17 (Execution ID), UTF-8 string
+- Key: metal_id
 - Value: FIX-like message, UTF-8 string
 - Headers:
   - `event_type`: `trade_execution_report`
   - `schema_version`: `1`
   - `source`: `synthetic_fix`
   - `content_type`: `text/plain`
+  - `idempotency_key`: execution ID (FIX 17)
 
 ## Payload
 
