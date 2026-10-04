@@ -1,3 +1,4 @@
+import logging
 import random
 from time import sleep
 
@@ -42,16 +43,19 @@ def send_next_api_request(api_sender: ApiSender) -> None:
 
 
 def main():
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
     kafka_sender = KafkaSender(bootstrap_servers="localhost:19092")
-    api_sender = ApiSender(base_url="http://localhost:8000")
+    # api_sender = ApiSender(base_url="http://localhost:8000")
 
     while True:
         event_type = random.choice(["trade_execution_report", "regional_price_quote"])
         send_next_event(kafka_sender=kafka_sender, event_type=event_type)
         sleep(random.uniform(1, 5))
 
-        send_next_api_request(api_sender)
-        sleep(random.uniform(1, 5))
+        # send_next_api_request(api_sender)
+        # sleep(random.uniform(1, 5))
 
 
 if __name__ == '__main__':

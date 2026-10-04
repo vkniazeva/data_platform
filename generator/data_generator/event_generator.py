@@ -18,8 +18,11 @@ from datetime import datetime, timezone, timedelta
 
 from generator.reference import METALS, REGIONS, WAREHOUSES
 
+import logging
+logger = logging.getLogger(__name__)
 
-def _generate_fix_body(message_number:int) -> tuple(str, str):
+
+def _generate_fix_body(message_number:int) -> tuple[str, str]:
 
     now = datetime.now(timezone.utc)
     event_timestamp = now.strftime("%Y%m%d-%H:%M:%S.%f")[:-3]
@@ -30,7 +33,6 @@ def _generate_fix_body(message_number:int) -> tuple(str, str):
     metal_id = random.choice(list(METALS))
     side = random.randint(1,2)
     quantity = random.randint(1,100)
-
 
     min_price = METALS[metal_id]['price_min']
     max_price = METALS[metal_id]['price_max']
@@ -55,6 +57,7 @@ def _generate_fix_event(message_number: int, event_type: str) -> dict:
     event_id = f"EX-{message_number:06d}"
     value, metal_id = _generate_fix_body(message_number)
 
+    logger.info(f"New event with a type: 'trade_execution_report' with an event_id: {event_id} was generated with a key: {metal_id}")
     return {
         "key": metal_id,
         "value": value,
@@ -110,6 +113,8 @@ def _generate_regional_event(message_number: int, event_type: str) -> dict:
         "event_timestamp": datetime.now(timezone.utc).strftime("%Y%m%d-%H:%M:%S.%f")[:-3],
         "conditions": conditions
     }
+    logger.info(
+        f"New event with a type: 'regional_price_quote' with an event_id: {event_id} was generated with a key: {metal_id}_{region}")
 
     return {
         "key": f"{metal_id}_{region}",
