@@ -1,4 +1,4 @@
-.PHONY: login up down status logs-redpanda logs-seaweedfs topics consume-fix consume-events generator
+.PHONY: up down status logs-redpanda logs-seaweedfs topics delete-topics consume-fix consume-events generator
 
 up:
 	docker compose up -d
@@ -22,6 +22,10 @@ s3-ls:
 topics:
 	docker compose exec redpanda-0 rpk topic create market.fix.raw --partitions 4 -c retention.ms=600000
 	docker compose exec redpanda-0 rpk topic create market.events --partitions 4 -c retention.ms=600000
+
+delete-topics:
+	docker compose exec redpanda-0 rpk topic delete market.fix.raw
+	docker compose exec redpanda-0 rpk topic delete market.events
 
 consume-fix:
 	docker compose exec redpanda-0 rpk topic consume market.fix.raw -n 10

@@ -36,3 +36,75 @@ generator -> REST API -> ingestion service -> same
 ## Quick start
 
 TBD
+
+## Events structure
+
+### FIX event
+
+```json 
+{
+  "topic": "market.fix.raw",
+  "key": "AH",
+  "value": "8=FIX.4.4|35=8|34=2052|52=20261005-21:12:26.047|17=EX-002052|55=AH|54=1|32=33|31=2664.29|60=20261005-21:04:16.047|",
+  "headers": [
+    {
+      "key": "event_type",
+      "value": "trade_execution_report"
+    },
+    {
+      "key": "schema_version",
+      "value": "1"
+    },
+    {
+      "key": "source",
+      "value": "synthetic_fix"
+    },
+    {
+      "key": "content_type",
+      "value": "text/plain"
+    },
+    {
+      "key": "idempotency_key",
+      "value": "EX-002052"
+    }
+  ],
+  "timestamp": 1791234746047,
+  "partition": 0,
+  "offset": 9
+}
+```
+
+### Regional FIX event
+```json
+{
+  "topic": "market.events",
+  "key": "PB_ME",
+  "value": "{\"event_type\": \"regional_price_quote\", \"schema_version\": 1, \"execution_id\": \"EX-ME-2039\", \"instrument\": \"PB\", \"side\": \"sell\", \"quantity\": 24, \"price\": 2196.44, \"currency\": \"USD\", \"event_timestamp\": \"20261005-21:11:47.968\", \"conditions\": {\"region\": \"Middle East\", \"warehouse\": {\"warehouse_id\": \"WH_DBX\", \"city\": \"Dubai\"}}}",
+  "headers": [
+    {
+      "key": "event_type",
+      "value": "regional_price_quote"
+    },
+    {
+      "key": "schema_version",
+      "value": "1"
+    },
+    {
+      "key": "source",
+      "value": "synthetic_regional_market"
+    },
+    {
+      "key": "content_type",
+      "value": "application/json"
+    },
+    {
+      "key": "idempotency_key",
+      "value": "EX-ME-2039"
+    }
+  ],
+  "timestamp": 1791234707968,
+  "partition": 0,
+  "offset": 9
+}
+
+```
