@@ -4,6 +4,7 @@ networks:
     driver: bridge
 volumes:
   redpanda-0: null
+  seaweedfs-volume: null
 services:
   redpanda-0:
     command:
@@ -39,7 +40,7 @@ services:
       - 18082:18082
       - 19092:19092
       - 19644:9644
-  console:
+  redpanda_console:
     container_name: redpanda-console
     image: docker.redpanda.com/redpandadata/console:v3.12.0
     networks:
@@ -62,3 +63,18 @@ services:
       - 8080:8080
     depends_on:
       - redpanda-0
+
+  seaweedfs:
+    container_name: seaweedfs
+    image: chrislusf/seaweedfs
+    command: [ "mini", "-dir=/data" ]
+    environment:
+      SEAWEED_KEY_ID: ${SEAWEED_ROOT_USER}
+      SEAWEED_ACCESS_KEY: ${SEAWEED_ROOT_PASSWORD}
+      S3_BUCKET: raw-events
+    ports:
+      - "8333:8333"
+    volumes:
+      - seaweedfs-volume:/data
+    networks:
+      - redpanda_network

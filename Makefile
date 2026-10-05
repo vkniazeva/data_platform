@@ -1,7 +1,7 @@
-.PHONY: up down status logs topics consume-fix consume-events generator
+.PHONY: login up down status logs-redpanda logs-seaweedfs topics consume-fix consume-events generator
 
 up:
-	docker compose up -d redpanda-0
+	docker compose up -d
 
 down:
 	docker compose down
@@ -9,12 +9,19 @@ down:
 status:
 	docker compose ps
 
-logs:
+logs-redpanda:
 	docker compose logs -f redpanda-0
 
+logs-seaweedfs:
+	docker compose logs -f seaweedfs
+
+s3-ls:
+	docker compose up -d seaweedfs
+	@set -a; . ./.env; set +a; SEAWEED_KEY_ID="$$SEAWEED_ROOT_USER" SEAWEED_ACCESS_KEY="$$SEAWEED_ROOT_PASSWORD" aws --endpoint-url http://localhost:8333 s3 ls
+
 topics:
-	docker compose exec redpanda-0 rpk topic create market.fix.raw
-	docker compose exec redpanda-0 rpk topic create market.events
+	docker compose exec redpanda-0 rpk topic create market.fix.raw --partitions 4 -c retention.ms=600000
+	docker compose exec redpanda-0 rpk topic create market.events --partitions 4 -c retention.ms=600000
 
 consume-fix:
 	docker compose exec redpanda-0 rpk topic consume market.fix.raw -n 10
