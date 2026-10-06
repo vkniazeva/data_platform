@@ -1,4 +1,6 @@
 import os
+import time
+
 import pyarrow as pa
 import pyarrow.parquet as pq
 import io
@@ -38,15 +40,28 @@ class ParquetWriter:
 
         buffer = io.BytesIO()
         pq.write_table(table, buffer)
-        buffer.seek(0)
 
-        self._s3_client.put_object(
-            Bucket=self.bucket,
-            Key=f"{self.topic}/{event_date}.parquet",
-            Body=buffer.read()
-        )
+
+        for attempt in range(3):
+            try:
+                buffer.seek(0)
+                self._s3_client.put_object(
+                    Bucket=self.bucket,
+                    Key=f"{self.topic}/{event_date}.parquet",
+                    Body=buffer.read()
+                )
+                break
+            except Exception as e:
+                if attempt < 2:
+                    logger.warning(f"Attempt {attempt + 1} failed: {e}, retrying...")
+                    time.sleep(attempt + 1)
+                else:
+                    logger.error(f"All attempts failed: {e}")
+                    raise
+
+        count = len(self._buffer)
+        logger.info(f"{count} messages saved to S3: {self.topic}/{event_date}.parquet")
         self._buffer = []
-
 
 
     def write_to_buffer(self, event_dict: dict, event_date: str) -> None:

@@ -1,4 +1,6 @@
+import signal
 import threading
+import time
 
 from dotenv import load_dotenv
 
@@ -12,16 +14,31 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+stop_event = threading.Event()
 
 def worker_fix():
     topic = "market.fix.raw"
     group_id = "fix_event_consumer"
-    create_worker(topic, group_id, parse_fix_event, return_fix_event_date)
+
+    while not stop_event.is_set():
+        try:
+            create_worker(topic, group_id, parse_fix_event, return_fix_event_date)
+        except Exception as e:
+            logger.error(f"Worker {topic} crashed: {e}", exc_info=True)
+            logger.info(f"Restarting worker {topic} in 5 seconds")
+            time.sleep(5)
 
 def worker_regional():
     topic = "market.events"
     group_id = "regional_price_consumer"
-    create_worker(topic, group_id, parse_regional_event ,return_regional_event_date)
+
+    while not stop_event.is_set():
+        try:
+            create_worker(topic, group_id, parse_regional_event ,return_regional_event_date)
+        except Exception as e:
+            logger.error(f"Worker {topic} crashed: {e}", exc_info=True)
+            logger.info(f"Restarting worker {topic} in 5 seconds")
+            time.sleep(5)
 
 def create_worker(topic: str, group_id: str, parser, date_parser) -> None:
     bootstrap_servers = "localhost:19092"
@@ -32,7 +49,7 @@ def create_worker(topic: str, group_id: str, parser, date_parser) -> None:
 
     writer = ParquetWriter(topic)
 
-    for msg in kafka_consumer.consume_messages():
+    for msg in kafka_consumer.consume_messages(stop_event):
         logger.info('started processing message')
         try:
             event = parser(msg.value())
@@ -40,10 +57,17 @@ def create_worker(topic: str, group_id: str, parser, date_parser) -> None:
             writer.write_to_buffer(event, event_date)
             logger.info('writing to buffer')
             kafka_consumer.commit_message(msg)
+            if stop_event.is_set():
+                break
         except Exception as e:
             logger.error(f"Error processing message: {e}", exc_info=True)
 
+    writer.flush(writer.current_date)
+    kafka_consumer.close_consumer()
 
+
+def handler(signum, frame):
+    stop_event.set()
 
 def main():
     logging.basicConfig(level=logging.INFO)
@@ -51,8 +75,12 @@ def main():
     t2 = threading.Thread(target=worker_regional)
     t1.start()
     t2.start()
+    signal.signal(signal.SIGINT, handler)
     t1.join()
     t2.join()
+
+
+
 
 if __name__ == "__main__":
     main()

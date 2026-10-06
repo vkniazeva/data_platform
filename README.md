@@ -25,6 +25,30 @@ generator -> REST API -> ingestion service -> same
 - Replay: raw events are stored as immutable files, so any downstream table can be rebuilt.
 - Writes never append to existing files: each batch goes to a new, uniquely named file.
 
+## Ingestion service
+
+The ingestion service runs two parallel workers — one per topic — in a single process using `threading`. Each worker is an independent Kafka consumer in its own consumer group.
+
+**Partition strategy:**
+- `market.fix.raw` — 4 partitions, partition key: `metal_id`
+- `market.events` — 4 partitions, partition key: `metal_id_region`
+- 2 active partitions per topic now, 2 reserved for horizontal scaling
+- Adding more workers redistributes partitions automatically via Kafka rebalancing
+
+**Buffering:**
+- Messages are buffered in memory and flushed to SeaweedFS as Parquet every 100 messages or on day change
+- Files are partitioned by event date (from the event itself, not processing time) and topic: `{topic}/{YYYY-MM-DD}.parquet`
+
+**Error handling:**
+- Graceful shutdown on Ctrl+C: buffer is flushed and consumer is closed cleanly before exit
+- Worker crash recovery: each worker restarts automatically after 5 seconds if it crashes
+- S3 write retry: up to 3 attempts with increasing delay (1s, 2s) before raising
+- Manual offset commit: offset is committed only after successful write to S3, guaranteeing at-least-once delivery
+
+**Planned improvements:**
+- Batch reads from Kafka for backpressure control
+- Dead letter queue for poison messages
+
 ## Roadmap
 
 - [x] Data generator

@@ -52,7 +52,7 @@ def main():
     while True:
         event_type = random.choice(["trade_execution_report", "regional_price_quote"])
         send_next_event(kafka_sender=kafka_sender, event_type=event_type)
-        sleep(random.uniform(1, 5))
+        sleep(random.uniform(0.1, 0.5))
 
         # send_next_api_request(api_sender)
         # sleep(random.uniform(1, 5))

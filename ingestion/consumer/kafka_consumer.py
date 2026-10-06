@@ -1,6 +1,7 @@
 from confluent_kafka import Consumer
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -16,8 +17,8 @@ class KafkaConsumer:
                 "enable.auto.commit": False
         })
 
-    def consume_messages(self):
-        while True:
+    def consume_messages(self, stop_event):
+        while not stop_event.is_set():
             msg = self._consumer.poll(timeout=1.0)
             if msg is None:
                 continue
@@ -30,8 +31,11 @@ class KafkaConsumer:
         self._consumer.commit(message=msg)
         logger.debug(f"Message has been successfully committed to a partition: {msg.partition()} with offset: {msg.offset()}")
 
+    def _on_assign(self, consumer, partitions):
+        logger.info(f"Assigned partitions: {[p.partition for p in partitions]}")
+
     def subscribe_topic(self):
-        self._consumer.subscribe(topics=[self.topic])
+        self._consumer.subscribe(topics=[self.topic], on_assign=self._on_assign)
 
     def close_consumer(self):
         self._consumer.close()
