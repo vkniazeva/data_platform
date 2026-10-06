@@ -9,9 +9,12 @@ from datetime import datetime, timezone
 
 load_dotenv()
 
+import logging
+logger = logging.getLogger(__name__)
+
 class ParquetWriter:
-    def __init__(self, bucket, topic):
-        self.bucket = bucket
+    def __init__(self, topic):
+        self.bucket = os.getenv("BUCKET_NAME")
         self.topic = topic
 
         self._buffer = []
@@ -50,8 +53,9 @@ class ParquetWriter:
         if event_date != self.current_date:
             self.flush(event_date)
             self.current_date = event_date
-        if len(self._buffer) >= 100:
+        if len(self._buffer) >= 10:
             self.flush(event_date)
+            logger.info("Flushed to S3")
         self._buffer.append(event_dict)
 
 

@@ -71,7 +71,7 @@ services:
     environment:
       SEAWEED_KEY_ID: ${SEAWEED_ROOT_USER}
       SEAWEED_ACCESS_KEY: ${SEAWEED_ROOT_PASSWORD}
-      S3_BUCKET: raw-events
+      S3_BUCKET: ${BUCKET_NAME}
     ports:
       - "8333:8333"
     volumes:

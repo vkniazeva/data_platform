@@ -27,15 +27,61 @@ generator -> REST API -> ingestion service -> same
 
 ## Roadmap
 
-- [ ] Data generator
-- [ ] Kafka / Redpanda locally
-- [ ] Ingestion service, raw Parquet in MinIO
+- [x] Data generator
+- [x] Kafka / Redpanda locally
+- [x] Ingestion service, raw Parquet in object storage (SeaweedFS)
 - [ ] ClickHouse loading
 - [ ] Spark and Iceberg experiments
 
 ## Quick start
 
-TBD
+**1. Start the stack**
+```bash
+make up
+```
+
+**2. Create topics**
+```bash
+make topics
+```
+
+**3. Start the generator** (terminal 1)
+```bash
+make generator
+```
+
+**4. Start the ingestion service** (terminal 2)
+```bash
+python -m ingestion.main
+```
+
+**5. Check Redpanda Console**
+
+Open http://localhost:8080
+
+**6. Verify data in object storage**
+```bash
+# list files
+aws --endpoint-url http://localhost:8333 s3 ls s3://raw-events/ --recursive
+
+# download and inspect a parquet file
+aws --endpoint-url http://localhost:8333 s3 cp s3://raw-events/market.fix.raw/2026-10-06.parquet /tmp/fix.parquet
+python3 -c "import pyarrow.parquet as pq; print(pq.read_table('/tmp/fix.parquet').to_pandas())"
+
+aws --endpoint-url http://localhost:8333 s3 cp s3://raw-events/market.events/2026-10-06.parquet /tmp/events.parquet
+python3 -c "import pyarrow.parquet as pq; print(pq.read_table('/tmp/events.parquet').to_pandas())"
+```
+
+**7. Consume raw messages from Redpanda**
+```bash
+make consume-fix
+make consume-events
+```
+
+**8. Tear down**
+```bash
+make down
+```
 
 ## Events structure
 
