@@ -1,3 +1,4 @@
 confluent_kafka
 boto3
 pyarrow
+clickhouse-connect

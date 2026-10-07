@@ -88,5 +88,6 @@ services:
       - "9000:9000"
     volumes:
       - clickhouse-volume:/var/lib/clickhouse
+      - ./clickhouse/users.d:/etc/clickhouse-server/users.d
     networks:
       - redpanda_network
