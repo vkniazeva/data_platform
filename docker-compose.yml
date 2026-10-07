@@ -5,6 +5,7 @@ networks:
 volumes:
   redpanda-0: null
   seaweedfs-volume: null
+  clickhouse-volume: null
 services:
   redpanda-0:
     command:
@@ -76,5 +77,16 @@ services:
       - "8333:8333"
     volumes:
       - seaweedfs-volume:/data
+    networks:
+      - redpanda_network
+
+  clickhouse:
+    container_name: clickhouse
+    image: clickhouse/clickhouse-server:latest
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse-volume:/var/lib/clickhouse
     networks:
       - redpanda_network

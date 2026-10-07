@@ -1,4 +1,4 @@
-.PHONY: up down status logs-redpanda logs-seaweedfs topics delete-topics consume-fix consume-events generator
+.PHONY: up down status logs-redpanda logs-seaweedfs topics delete-topics consume-fix consume-events generator ingestion clickhouse init-clickhouse
 
 up:
 	docker compose up -d
@@ -35,3 +35,12 @@ consume-events:
 
 generator:
 	python -m generator.main
+
+ingestion:
+	python -m ingestion.main
+
+clickhouse:
+	docker compose exec clickhouse clickhouse-client
+
+init-clickhouse:
+	docker compose exec -T clickhouse clickhouse-client --multiquery < clickhouse/init.sql
