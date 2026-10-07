@@ -14,7 +14,8 @@ class KafkaConsumer:
                 "bootstrap.servers": self.bootstrap_servers,
                 "group.id": self.group_id,
                 "auto.offset.reset": "earliest",
-                "enable.auto.commit": False
+                "enable.auto.commit": False,
+                "log_level": 0
         })
 
     def consume_messages(self, stop_event):

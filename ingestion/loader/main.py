@@ -1,4 +1,6 @@
 import os
+import threading
+
 from dotenv import load_dotenv
 import boto3
 import clickhouse_connect
@@ -32,9 +34,20 @@ def main():
 
     bronze_loader = BronzeLoader(s3_client, ch_client)
 
+    t1 = threading.Thread(target=process_fix_events, args=(bronze_loader, fix_files))
+    t2 = threading.Thread(target=process_regional_events, args=(bronze_loader, regional_files))
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+
+def process_fix_events(bronze_loader: BronzeLoader, fix_files: list):
     for file in fix_files["Contents"]:
         bronze_loader.load_fix_events(file["Key"])
 
+
+def process_regional_events(bronze_loader: BronzeLoader, regional_files: list):
     for file in regional_files["Contents"]:
         bronze_loader.load_regional_events(file["Key"])
 

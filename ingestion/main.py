@@ -49,14 +49,25 @@ def create_worker(topic: str, group_id: str, parser, date_parser) -> None:
 
     writer = ParquetWriter(topic)
 
+    msg_count = 0
+    t_start = time.monotonic()
+
     for msg in kafka_consumer.consume_messages(stop_event):
-        logger.info('started processing message')
+        logger.debug('started processing message')
         try:
+            t0 = time.monotonic()
             event = parser(msg.value())
+            elapsed = time.monotonic() - t0
+            logger.debug(f"Message parsed in {elapsed * 1000:.1f} ms")
             event_date = date_parser(event)
             writer.write_to_buffer(event, event_date)
-            logger.info('writing to buffer')
-            kafka_consumer.commit_message(msg)
+            logger.debug('writing to buffer')
+            if msg_count % 10 == 0:
+                kafka_consumer.commit_message(msg)
+            msg_count += 1
+            if msg_count % 100 == 0:
+                elapsed = time.monotonic() - t_start
+                logger.info(f"Throughput: {msg_count / elapsed:.1f} msg/sec ({msg_count} messages in {elapsed:.1f}s)")
             if stop_event.is_set():
                 break
         except Exception as e:

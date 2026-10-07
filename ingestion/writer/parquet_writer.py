@@ -41,15 +41,17 @@ class ParquetWriter:
         buffer = io.BytesIO()
         pq.write_table(table, buffer)
 
-
+        s3_key = f"{self.topic}/{event_date}.parquet"
         for attempt in range(3):
             try:
                 buffer.seek(0)
+                t0 = time.monotonic()
                 self._s3_client.put_object(
                     Bucket=self.bucket,
-                    Key=f"{self.topic}/{event_date}.parquet",
+                    Key=s3_key,
                     Body=buffer.read()
                 )
+                elapsed = time.monotonic() - t0
                 break
             except Exception as e:
                 if attempt < 2:
@@ -60,7 +62,8 @@ class ParquetWriter:
                     raise
 
         count = len(self._buffer)
-        logger.info(f"{count} messages saved to S3: {self.topic}/{event_date}.parquet")
+        size_kb = buffer.tell() / 1024
+        logger.info(f"S3 write: {count} messages, {size_kb:.1f} KB → {s3_key} in {elapsed * 1000:.1f} ms")
         self._buffer = []
 
 
@@ -68,7 +71,7 @@ class ParquetWriter:
         if event_date != self.current_date:
             self.flush(event_date)
             self.current_date = event_date
-        if len(self._buffer) >= 10:
+        if len(self._buffer) >= 100:
             self.flush(event_date)
             logger.info("Flushed to S3")
         self._buffer.append(event_dict)

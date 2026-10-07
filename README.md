@@ -49,13 +49,35 @@ The ingestion service runs two parallel workers — one per topic — in a singl
 - Batch reads from Kafka for backpressure control
 - Dead letter queue for poison messages
 
+## Performance
+
+Measured on a laptop (Apple M-series, Docker, local SeaweedFS and ClickHouse).
+
+**Kafka → S3 (ingestion service):**
+| Metric | Value |
+|--------|-------|
+| Throughput | ~2.5–3 msg/sec |
+| Message parse time | < 0.2 ms |
+| S3 write (100 messages, ~7 KB) | 5–15 ms |
+
+Note: throughput is bottlenecked by synchronous Kafka offset commit after every 10 messages (~300 ms round-trip per commit batch).
+
+**S3 → ClickHouse (bronze loader):**
+| Metric | Value |
+|--------|-------|
+| Total pipeline time (S3 read + transform + CH insert, 100 rows) | 58–75 ms |
+| ClickHouse insert time (100 rows) | 55–70 ms |
+| First file cold start (connection overhead) | ~375–800 ms |
+
 ## Roadmap
 
 - [x] Data generator
 - [x] Kafka / Redpanda locally
 - [x] Ingestion service, raw Parquet in object storage (SeaweedFS)
-- [ ] ClickHouse loading
+- [x] ClickHouse bronze loading
+- [ ] Silver / gold layers (dbt)
 - [ ] Spark and Iceberg experiments
+- [ ] API data processing
 
 ## Quick start
 
@@ -178,3 +200,8 @@ make down
 }
 
 ```
+
+## Clickhouse
+CREATE DATABASE bronze;
+CREATE DATABASE silver;
+CREATE DATABASE gold;
