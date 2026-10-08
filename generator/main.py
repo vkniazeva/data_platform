@@ -24,7 +24,8 @@ def send_next_event(kafka_sender: KafkaSender, event_type: str) -> None:
     duplicate_count = random.choices(population=[0, 1, 2], weights=[80, 15, 5])[0]
 
     for _ in range(duplicate_count+1):
-        kafka_sender.send(topic=event_config["topic"], event=event)
+        schema_ids = {"market.events": 1, "market.fix.raw": 2}
+        kafka_sender.send(topic=event_config["topic"], event=event, schema_id=schema_ids.get(event_config["topic"]))
 
     event_config["message_number"] += 1
 

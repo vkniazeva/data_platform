@@ -25,17 +25,21 @@ class KafkaSender:
         else:
             logger.debug(f"Message delivered to partition {msg.partition()}")
 
-    def send(self, topic: str, event: dict) -> None:
+    def send(self, topic: str, event: dict, schema_id: int = None) -> None:
         value = event["value"]
 
         if isinstance(value, dict):
             value = json.dumps(value)
 
+        headers = list(event["headers"].items())
+        if schema_id is not None:
+            headers = headers + [("schema_id", str(schema_id))]
+
         self._producer.produce(
             topic=topic,
             key=event["key"],
             value=value,
-            headers=event["headers"],
+            headers=headers,
             callback=self._on_delivery_callback
         )
 

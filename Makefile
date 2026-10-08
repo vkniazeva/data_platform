@@ -22,6 +22,16 @@ s3-ls:
 topics:
 	docker compose exec redpanda-0 rpk topic create market.fix.raw --partitions 4 -c retention.ms=600000
 	docker compose exec redpanda-0 rpk topic create market.events --partitions 4 -c retention.ms=600000
+	docker compose exec redpanda-0 rpk topic create market.events.dlq --partitions 1 -c retention.ms=86400000
+	docker compose exec redpanda-0 rpk topic create market.fix.raw.dlq --partitions 1 -c retention.ms=86400000
+
+register-schemas:
+	curl -s -X POST http://localhost:18081/subjects/market.events/versions \
+		-H "Content-Type: application/vnd.schemaregistry.v1+json" \
+		-d '{"schemaType":"JSON","schema":"{\"type\":\"object\",\"properties\":{\"event_type\":{\"type\":\"string\"},\"schema_version\":{\"type\":\"integer\"},\"execution_id\":{\"type\":\"string\"},\"instrument\":{\"type\":\"string\"},\"side\":{\"type\":\"string\"},\"quantity\":{\"type\":\"integer\"},\"price\":{\"type\":\"number\"},\"currency\":{\"type\":\"string\"},\"event_timestamp\":{\"type\":\"string\"},\"conditions\":{\"type\":\"object\"}},\"required\":[\"event_type\",\"execution_id\",\"instrument\"]}"}'
+	curl -s -X POST http://localhost:18081/subjects/market.fix.raw/versions \
+		-H "Content-Type: application/vnd.schemaregistry.v1+json" \
+		-d '{"schemaType":"JSON","schema":"{\"type\":\"string\",\"description\":\"FIX 4.4 pipe-delimited message\"}"}'
 
 delete-topics:
 	docker compose exec redpanda-0 rpk topic delete market.fix.raw

@@ -9,8 +9,10 @@ from dotenv import load_dotenv
 
 from ingestion.loader.bronze_loader import BronzeLoader
 from ingestion.raw.consumer import KafkaConsumer
+from ingestion.raw.dlq_producer import DlqProducer
 from ingestion.raw.parser.fix_parser import parse_fix_event, return_fix_event_date
 from ingestion.raw.parser.regional_parser import parse_regional_event, return_regional_event_date
+from ingestion.raw.schema_registry import SchemaRegistryClient
 from ingestion.raw.writer import ParquetWriter
 
 import logging
@@ -20,6 +22,9 @@ load_dotenv()
 
 stop_event = threading.Event()
 
+_schema_registry = SchemaRegistryClient(url=os.getenv("SCHEMA_REGISTRY_URL", "http://localhost:8081"))
+_dlq_producer = DlqProducer(bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:19092"))
+
 WORKERS = [
     {
         "topic": "market.fix.raw",
@@ -27,6 +32,9 @@ WORKERS = [
         "parser": parse_fix_event,
         "date_parser": return_fix_event_date,
         "loader_method": "load_fix_events",
+        "schema_registry": _schema_registry,
+        "dlq_producer": _dlq_producer,
+        "requires_schema": True,
     },
     {
         "topic": "market.events",
@@ -34,6 +42,9 @@ WORKERS = [
         "parser": parse_regional_event,
         "date_parser": return_regional_event_date,
         "loader_method": "load_regional_events",
+        "schema_registry": _schema_registry,
+        "dlq_producer": _dlq_producer,
+        "requires_schema": True,
     },
 ]
 
@@ -56,8 +67,16 @@ def _make_ch_client():
     )
 
 
-def run_worker(topic: str, group_id: str, parser, date_parser, loader_method: str) -> None:
-    kafka_consumer = KafkaConsumer(topic=topic, group_id=group_id, bootstrap_servers="localhost:19092")
+def run_worker(topic: str, group_id: str, parser, date_parser, loader_method: str,
+               schema_registry=None, dlq_producer=None, requires_schema: bool = False) -> None:
+    kafka_consumer = KafkaConsumer(
+        topic=topic,
+        group_id=group_id,
+        bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:19092"),
+        schema_registry=schema_registry,
+        dlq_producer=dlq_producer,
+        requires_schema=requires_schema,
+    )
     kafka_consumer.subscribe_topic()
 
     writer = ParquetWriter(topic)

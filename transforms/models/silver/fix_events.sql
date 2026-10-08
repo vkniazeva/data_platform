@@ -10,3 +10,4 @@ select
 	source_file,
 	pipeline_version
 from bronze.fix_events
+qualify row_number() over (partition by "17" order by "34" desc) = 1
