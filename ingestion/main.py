@@ -60,10 +60,10 @@ def create_worker(topic: str, group_id: str, parser, date_parser) -> None:
             elapsed = time.monotonic() - t0
             logger.debug(f"Message parsed in {elapsed * 1000:.1f} ms")
             event_date = date_parser(event)
-            writer.write_to_buffer(event, event_date)
+            flushed = writer.write_to_buffer(event, event_date, msg)
             logger.debug('writing to buffer')
-            if msg_count % 10 == 0:
-                kafka_consumer.commit_message(msg)
+            if flushed:
+                kafka_consumer.commit_message(writer._last_msg)
             msg_count += 1
             if msg_count % 100 == 0:
                 elapsed = time.monotonic() - t_start
@@ -73,7 +73,8 @@ def create_worker(topic: str, group_id: str, parser, date_parser) -> None:
         except Exception as e:
             logger.error(f"Error processing message: {e}", exc_info=True)
 
-    writer.flush(writer.current_date)
+    if writer.flush(writer.current_date):
+        kafka_consumer.commit_message(writer._last_msg)
     kafka_consumer.close_consumer()
 
 

@@ -56,11 +56,11 @@ Measured on a laptop (Apple M-series, Docker, local SeaweedFS and ClickHouse).
 **Kafka → S3 (ingestion service):**
 | Metric | Value |
 |--------|-------|
-| Throughput | ~2.5–3 msg/sec |
+| Throughput (catching up on backlog) | ~265–446 msg/sec |
+| Throughput (steady state, generator-bound) | ~25–50 msg/sec |
 | Message parse time | < 0.2 ms |
 | S3 write (100 messages, ~7 KB) | 5–15 ms |
-
-Note: throughput is bottlenecked by synchronous Kafka offset commit after every 10 messages (~300 ms round-trip per commit batch).
+| Kafka offset commit (after every 100 messages) | ~300 ms |
 
 **S3 → ClickHouse (bronze loader):**
 | Metric | Value |
@@ -68,6 +68,15 @@ Note: throughput is bottlenecked by synchronous Kafka offset commit after every 
 | Total pipeline time (S3 read + transform + CH insert, 100 rows) | 58–75 ms |
 | ClickHouse insert time (100 rows) | 55–70 ms |
 | First file cold start (connection overhead) | ~375–800 ms |
+
+**End-to-end latency (event produced → visible in ClickHouse):**
+
+Data flows through two independent stages with different triggers:
+
+1. **Event → S3**: buffer flushes every 100 messages. At 25–50 msg/sec per topic, this means **2–4 seconds** under normal load. At low generator rates (1–2 msg/sec) latency grows to **50–100 seconds**.
+2. **S3 → ClickHouse**: the bronze loader is a batch job triggered manually. Until it runs, data is not in ClickHouse. Each run takes **60–75 ms per 100 rows**.
+
+Total latency is therefore dominated by how often the bronze loader is scheduled. With continuous ingestion and a loader running every minute, typical end-to-end latency is **~1 minute**. This is a deliberate trade-off: raw events land in immutable Parquet first for replay, ClickHouse is a derived view.
 
 ## Roadmap
 

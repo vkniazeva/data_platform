@@ -26,7 +26,6 @@ def send_next_event(kafka_sender: KafkaSender, event_type: str) -> None:
     for _ in range(duplicate_count+1):
         kafka_sender.send(topic=event_config["topic"], event=event)
 
-    kafka_sender.flush()
     event_config["message_number"] += 1
 
 def send_next_api_request(api_sender: ApiSender) -> None:
@@ -49,13 +48,18 @@ def main():
     kafka_sender = KafkaSender(bootstrap_servers="localhost:19092")
     # api_sender = ApiSender(base_url="http://localhost:8000")
 
+    count = 0
     while True:
         event_type = random.choice(["trade_execution_report", "regional_price_quote"])
         send_next_event(kafka_sender=kafka_sender, event_type=event_type)
-        sleep(random.uniform(0.1, 0.5))
+        count += 1
+        if count % 100 == 0:
+            kafka_sender.flush()
+        sleep(random.uniform(0.01, 0.05))
 
         # send_next_api_request(api_sender)
         # sleep(random.uniform(1, 5))
+
 
 
 if __name__ == '__main__':

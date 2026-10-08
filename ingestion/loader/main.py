@@ -22,6 +22,19 @@ def main():
         aws_secret_access_key=os.getenv("SEAWEED_ROOT_PASSWORD")
     )
 
+    fix_files = s3_client.list_objects_v2(Bucket="raw-events", Prefix="market.fix.raw/")
+    regional_files = s3_client.list_objects_v2(Bucket="raw-events", Prefix="market.events/")
+
+
+    t1 = threading.Thread(target=process_fix_events, args=(s3_client, fix_files))
+    t2 = threading.Thread(target=process_regional_events, args=(s3_client, regional_files))
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+
+def process_fix_events(s3_client, fix_files: list):
     ch_client = clickhouse_connect.get_client(
         host=os.getenv("CLICKHOUSE_HOST"),
         port=int(os.getenv("CLICKHOUSE_PORT")),
@@ -29,25 +42,22 @@ def main():
         password=os.getenv("CLICKHOUSE_PASSWORD") or ""
     )
 
-    fix_files = s3_client.list_objects_v2(Bucket="raw-events", Prefix="market.fix.raw/")
-    regional_files = s3_client.list_objects_v2(Bucket="raw-events", Prefix="market.events/")
-
     bronze_loader = BronzeLoader(s3_client, ch_client)
 
-    t1 = threading.Thread(target=process_fix_events, args=(bronze_loader, fix_files))
-    t2 = threading.Thread(target=process_regional_events, args=(bronze_loader, regional_files))
-    t1.start()
-    t2.start()
-    t1.join()
-    t2.join()
-
-
-def process_fix_events(bronze_loader: BronzeLoader, fix_files: list):
     for file in fix_files["Contents"]:
         bronze_loader.load_fix_events(file["Key"])
 
 
-def process_regional_events(bronze_loader: BronzeLoader, regional_files: list):
+def process_regional_events(s3_client, regional_files: list):
+    ch_client = clickhouse_connect.get_client(
+        host=os.getenv("CLICKHOUSE_HOST"),
+        port=int(os.getenv("CLICKHOUSE_PORT")),
+        username=os.getenv("CLICKHOUSE_USERNAME"),
+        password=os.getenv("CLICKHOUSE_PASSWORD") or ""
+    )
+
+    bronze_loader = BronzeLoader(s3_client, ch_client)
+
     for file in regional_files["Contents"]:
         bronze_loader.load_regional_events(file["Key"])
 

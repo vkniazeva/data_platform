@@ -7,7 +7,7 @@ import io
 
 import boto3
 from dotenv import load_dotenv
-from datetime import datetime, timezone
+from datetime import datetime
 
 load_dotenv()
 
@@ -18,9 +18,10 @@ class ParquetWriter:
     def __init__(self, topic):
         self.bucket = os.getenv("BUCKET_NAME")
         self.topic = topic
+        self._last_msg = None
 
         self._buffer = []
-        self.current_date = datetime.now(timezone.utc)
+        self.current_date = ""
 
         self._s3_client = boto3.client(
             "s3",
@@ -30,9 +31,9 @@ class ParquetWriter:
         )
 
 
-    def flush(self, event_date: str):
+    def flush(self, event_date: str) -> bool:
         if not self._buffer:
-            return
+            return False
 
         keys = self._buffer[0].keys()
         transposed = {key: [row[key] for row in self._buffer] for key in keys}
@@ -65,16 +66,21 @@ class ParquetWriter:
         size_kb = buffer.tell() / 1024
         logger.info(f"S3 write: {count} messages, {size_kb:.1f} KB → {s3_key} in {elapsed * 1000:.1f} ms")
         self._buffer = []
+        return True
 
 
-    def write_to_buffer(self, event_dict: dict, event_date: str) -> None:
+
+    def write_to_buffer(self, event_dict: dict, event_date: str, msg) -> bool:
+        self._buffer.append(event_dict)
+        self._last_msg = msg
         if event_date != self.current_date:
             self.flush(event_date)
             self.current_date = event_date
+            return True
         if len(self._buffer) >= 100:
             self.flush(event_date)
-            logger.info("Flushed to S3")
-        self._buffer.append(event_dict)
+            return True
+        return False
 
 
 

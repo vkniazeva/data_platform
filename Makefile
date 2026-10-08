@@ -40,7 +40,7 @@ ingestion:
 	python -m ingestion.main
 
 clickhouse:
-	docker compose exec clickhouse clickhouse-client
+	docker compose exec clickhouse clickhouse-client --password clickhouse
 
 init-clickhouse:
-	docker compose exec -T clickhouse clickhouse-client --multiquery < clickhouse/init.sql
+	docker compose exec -T clickhouse clickhouse-client --password clickhouse --multiquery < clickhouse/init.sql
