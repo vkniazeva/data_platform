@@ -15,13 +15,77 @@ A generator produces synthetic trading data. A pipeline ingests it via Kafka, st
 
 ## Architecture
 
-```
-generator → Kafka → pipeline → S3 (raw Parquet, immutable)
-                             → ClickHouse bronze (raw)
-                             → ClickHouse silver (typed, deduped, via dbt)
-                             → ClickHouse gold (aggregates, via dbt)
+```mermaid
+flowchart LR
+    subgraph gen["Generator"]
+        G1["FIX events\nmarket.fix.raw"]
+        G2["Regional events\nmarket.events"]
+        G3["Stock levels\nREST API"]
+    end
 
-generator → REST API → pipeline → same
+    subgraph kafka["Redpanda / Kafka"]
+        K1[["market.fix.raw"]]
+        K2[["market.events"]]
+        K3[["*.dlq"]]
+    end
+
+    subgraph pipeline["Ingestion Pipeline"]
+        P1["Schema\nvalidation"]
+        P2["Parse +\nbuffer"]
+        P3["S3 flush\nParquet"]
+        P4["ClickHouse\ninsert"]
+        P5["Commit\noffset"]
+    end
+
+    subgraph storage["Storage"]
+        S1[("MinIO / S3\nraw Parquet")]
+        CH1[("ClickHouse\nbronze")]
+    end
+
+    subgraph dbt["dbt transforms"]
+        D1["silver\ntyped, deduped"]
+        D2["gold\naggregates"]
+    end
+
+    G1 --> K1
+    G2 --> K2
+    G3 -->|HTTP| pipeline
+
+    K1 --> P1
+    K2 --> P1
+    P1 -->|invalid| K3
+    P1 -->|valid| P2
+    P2 --> P3
+    P3 --> S1
+    P3 --> P4
+    P4 --> CH1
+    P4 --> P5
+
+    CH1 --> D1
+    D1 --> D2
+```
+
+```mermaid
+flowchart TD
+    msg["Kafka message"]
+
+    msg --> hdr{has\nschema_id\nheader?}
+    hdr -->|no| req{requires\nschema?}
+    req -->|yes| dlq1[["DLQ\nmissing_schema_id"]]
+    req -->|no| parse
+
+    hdr -->|yes| cache{schema_id\nin cache?}
+    cache -->|yes| parse
+    cache -->|no| reg["Schema Registry\nGET /schemas/ids/:id"]
+    reg -->|200 OK| parse
+    reg -->|not found| dlq2[["DLQ\nunknown_schema_id"]]
+
+    parse["parse event"] --> buf["buffer\n(100 msgs)"]
+    buf -->|not full,\nsame date| poll["poll next"]
+    buf -->|full or\ndate changed| flush["flush Parquet\nto S3"]
+    flush --> ch["ClickHouse\ninsert"]
+    ch --> commit["commit\nKafka offset"]
+    commit --> poll
 ```
 
 ## Architectural decisions
