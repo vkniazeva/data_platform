@@ -71,12 +71,17 @@ Measured on a laptop (Apple M-series, Docker, local SeaweedFS and ClickHouse).
 
 **End-to-end latency (event produced → visible in ClickHouse):**
 
-Data flows through two independent stages with different triggers:
+The pipeline now runs as a single orchestrated process: Kafka → S3 flush → ClickHouse insert → commit offset. ClickHouse load is triggered automatically after every S3 flush, not on a separate schedule.
 
-1. **Event → S3**: buffer flushes every 100 messages. At 25–50 msg/sec per topic, this means **2–4 seconds** under normal load. At low generator rates (1–2 msg/sec) latency grows to **50–100 seconds**.
-2. **S3 → ClickHouse**: the bronze loader is a batch job triggered manually. Until it runs, data is not in ClickHouse. Each run takes **60–75 ms per 100 rows**.
+| Stage | Latency |
+|-------|---------|
+| Kafka → S3 flush (100 messages buffered) | 2–4 sec at 25–50 msg/sec steady state |
+| S3 → ClickHouse insert (100 rows) | 60–70 ms |
+| Total end-to-end | **~2–4 seconds** under normal load |
 
-Total latency is therefore dominated by how often the bronze loader is scheduled. With continuous ingestion and a loader running every minute, typical end-to-end latency is **~1 minute**. This is a deliberate trade-off: raw events land in immutable Parquet first for replay, ClickHouse is a derived view.
+At backlog catch-up speed (169–300 msg/sec), a batch of 100 messages flushes and lands in ClickHouse in under 100 ms total.
+
+Offset is committed to Kafka only after successful S3 write and ClickHouse insert, guaranteeing at-least-once delivery across the full pipeline.
 
 ## Roadmap
 

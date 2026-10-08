@@ -30,3 +30,9 @@ dist/
 
 # macOS
 .DS_Store
+
+# dbt
+transforms/target/
+transforms/logs/
+transforms/dbt_packages/
+logs/

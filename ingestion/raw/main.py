@@ -4,10 +4,10 @@ import time
 
 from dotenv import load_dotenv
 
-from ingestion.consumer.kafka_consumer import KafkaConsumer
-from ingestion.parser.fix_parser import parse_fix_event, return_fix_event_date
-from ingestion.parser.regional_parser import return_regional_event_date, parse_regional_event
-from ingestion.writer.parquet_writer import ParquetWriter
+from ingestion.raw.consumer import KafkaConsumer
+from ingestion.raw.parser.fix_parser import parse_fix_event, return_fix_event_date
+from ingestion.raw.parser.regional_parser import return_regional_event_date, parse_regional_event
+from ingestion.raw.writer import ParquetWriter
 
 import logging
 logger = logging.getLogger(__name__)
