@@ -31,9 +31,9 @@ class ParquetWriter:
         )
 
 
-    def flush(self, event_date: str) -> bool:
+    def flush(self, event_date: str) -> str | None:
         if not self._buffer:
-            return False
+            return None
 
         keys = self._buffer[0].keys()
         transposed = {key: [row[key] for row in self._buffer] for key in keys}
@@ -42,7 +42,8 @@ class ParquetWriter:
         buffer = io.BytesIO()
         pq.write_table(table, buffer)
 
-        s3_key = f"{self.topic}/{event_date}.parquet"
+        ts_ms = int(time.time() * 1000)
+        s3_key = f"{self.topic}/{event_date}/{ts_ms}.parquet"
         for attempt in range(3):
             try:
                 buffer.seek(0)
@@ -66,21 +67,20 @@ class ParquetWriter:
         size_kb = buffer.tell() / 1024
         logger.info(f"S3 write: {count} messages, {size_kb:.1f} KB → {s3_key} in {elapsed * 1000:.1f} ms")
         self._buffer = []
-        return True
+        return s3_key
 
 
 
-    def write_to_buffer(self, event_dict: dict, event_date: str, msg) -> bool:
+    def write_to_buffer(self, event_dict: dict, event_date: str, msg) -> str | None:
         self._buffer.append(event_dict)
         self._last_msg = msg
         if event_date != self.current_date:
-            self.flush(event_date)
+            key = self.flush(self.current_date) if self.current_date else None
             self.current_date = event_date
-            return True
+            return key
         if len(self._buffer) >= 100:
-            self.flush(event_date)
-            return True
-        return False
+            return self.flush(event_date)
+        return None
 
 
 

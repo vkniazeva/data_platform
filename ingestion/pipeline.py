@@ -90,9 +90,9 @@ def run_worker(topic: str, group_id: str, parser, date_parser, loader_method: st
         try:
             event = parser(msg.value())
             event_date = date_parser(event)
-            flushed = writer.write_to_buffer(event, event_date, msg)
-            if flushed:
-                load(f"{topic}/{writer.current_date}.parquet")
+            flushed_key = writer.write_to_buffer(event, event_date, msg)
+            if flushed_key:
+                load(flushed_key)
                 kafka_consumer.commit_message(writer._last_msg)
             msg_count += 1
             if msg_count % 100 == 0:
@@ -103,8 +103,9 @@ def run_worker(topic: str, group_id: str, parser, date_parser, loader_method: st
         except Exception as e:
             logger.error(f"[{topic}] Error processing message: {e}", exc_info=True)
 
-    if writer.flush(writer.current_date):
-        load(f"{topic}/{writer.current_date}.parquet")
+    final_key = writer.flush(writer.current_date)
+    if final_key:
+        load(final_key)
         kafka_consumer.commit_message(writer._last_msg)
     kafka_consumer.close_consumer()
 

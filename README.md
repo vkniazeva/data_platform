@@ -101,7 +101,14 @@ This makes deduplication visible and testable rather than relying on engine-leve
 
 ### Replay
 
-Raw events are written to immutable Parquet files in S3, partitioned by event date and topic: `{topic}/{YYYY-MM-DD}.parquet`. Files are never modified — each flush creates a new file or overwrites the current day's file atomically.
+Raw events are written as immutable Parquet files in S3, partitioned by topic and event date. Each flush produces a new uniquely-named file — nothing is ever overwritten:
+
+```
+{topic}/{YYYY-MM-DD}/{timestamp_ms}.parquet   ← written by pipeline (append)
+{topic}/{YYYY-MM-DD}/compacted.parquet        ← written by compaction job (daily)
+```
+
+A nightly compaction job (`ingestion/compaction.py`) merges all flush files for the previous day into a single `compacted.parquet` and deletes the originals. This keeps S3 tidy without sacrificing immutability during the day.
 
 Any downstream table (silver, gold) can be fully rebuilt by truncating it and replaying from bronze:
 ```bash
@@ -109,6 +116,15 @@ Any downstream table (silver, gold) can be fully rebuilt by truncating it and re
 curl -X POST "http://localhost:8123/" -u "default:clickhouse" --data "TRUNCATE TABLE silver.fix_events"
 # rebuild
 dbt run
+```
+
+**Production compaction:** run as a cron job at 00:05 UTC daily (5 minutes after midnight to let any late-arriving events land):
+```bash
+5 0 * * * cd /app && python -m ingestion.compaction
+```
+Or for a specific date:
+```bash
+make compact DATE=2026-10-07
 ```
 
 ### Delivery guarantee
@@ -230,7 +246,12 @@ make generator
 python -m ingestion.pipeline
 ```
 
-**5. Run dbt transformations**
+**5. Run compaction** (merges today's flush files into one, deletes originals)
+```bash
+make compact DATE=2026-10-08
+```
+
+**6. Run dbt transformations**
 ```bash
 cd transforms && dbt run
 ```
@@ -296,6 +317,8 @@ make down
 - [x] Data generator
 - [x] Kafka / Redpanda locally
 - [x] Ingestion pipeline — Kafka → S3 → ClickHouse bronze
+- [x] Schema Registry + DLQ
+- [x] Immutable Parquet with daily compaction
 - [x] Silver layer (dbt)
 - [ ] Gold layer (dbt)
 - [ ] Spark and Iceberg experiments

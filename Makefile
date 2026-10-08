@@ -49,6 +49,12 @@ generator:
 ingestion:
 	python -m ingestion.main
 
+compact:
+	python -m ingestion.compaction
+
+compact-date:
+	python -m ingestion.compaction $(DATE)
+
 clickhouse:
 	docker compose exec clickhouse clickhouse-client --password clickhouse
 
