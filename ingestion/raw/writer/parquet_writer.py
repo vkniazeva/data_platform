@@ -72,12 +72,13 @@ class ParquetWriter:
 
 
     def write_to_buffer(self, event_dict: dict, event_date: str, msg) -> str | None:
-        self._buffer.append(event_dict)
         self._last_msg = msg
         if event_date != self.current_date:
             key = self.flush(self.current_date) if self.current_date else None
             self.current_date = event_date
+            self._buffer.append(event_dict)
             return key
+        self._buffer.append(event_dict)
         if len(self._buffer) >= 100:
             return self.flush(event_date)
         return None
