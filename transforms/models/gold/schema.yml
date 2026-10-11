@@ -1,0 +1,192 @@
+version: 2
+
+models:
+  - name: fix_daily_summary
+    description: "Daily FIX trade aggregates per instrument and side"
+    columns:
+      - name: trade_date
+        tests:
+          - not_null
+      - name: instrument
+        tests:
+          - not_null
+      - name: side
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['buy', 'sell']
+      - name: number_of_deals
+        tests:
+          - not_null
+          - positive_value
+      - name: min_price
+        tests:
+          - not_null
+          - positive_value
+      - name: avg_price
+        tests:
+          - not_null
+          - positive_value
+      - name: max_price
+        tests:
+          - not_null
+          - positive_value
+    tests:
+      - price_consistency:
+          arguments:
+            min_col: min_price
+            avg_col: avg_price
+            max_col: max_price
+      - unique_combination:
+          arguments:
+            columns: ['trade_date', 'instrument', 'side']
+
+  - name: fix_hourly_summary
+    description: "Hourly FIX trade aggregates per instrument and side"
+    columns:
+      - name: trade_date
+        tests:
+          - not_null
+      - name: trade_hour
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23]
+      - name: time_of_day
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['night', 'morning', 'afternoon', 'evening']
+      - name: side
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['buy', 'sell']
+      - name: number_of_deals
+        tests:
+          - not_null
+          - positive_value
+    tests:
+      - price_consistency:
+          arguments:
+            min_col: min_price
+            avg_col: avg_price
+            max_col: max_price
+      - unique_combination:
+          arguments:
+            columns: ['trade_date', 'trade_hour', 'instrument', 'side']
+
+  - name: regional_events_daily_summary
+    description: "Daily regional trade aggregates per instrument, side, region and warehouse"
+    columns:
+      - name: event_date
+        tests:
+          - not_null
+      - name: instrument
+        tests:
+          - not_null
+      - name: side
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['buy', 'sell']
+      - name: region
+        tests:
+          - not_null
+      - name: number_of_deals
+        tests:
+          - not_null
+          - positive_value
+      - name: min_price
+        tests:
+          - not_null
+          - positive_value
+    tests:
+      - price_consistency:
+          arguments:
+            min_col: min_price
+            avg_col: avg_price
+            max_col: max_price
+      - unique_combination:
+          arguments:
+            columns: ['event_date', 'instrument', 'side', 'region', 'warehouse_city']
+
+  - name: regional_events_hourly
+    description: "Hourly regional trade aggregates"
+    columns:
+      - name: event_date
+        tests:
+          - not_null
+      - name: time_of_day
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['night', 'morning', 'afternoon', 'evening']
+      - name: side
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['buy', 'sell']
+    tests:
+      - price_consistency:
+          arguments:
+            min_col: min_price
+            avg_col: avg_price
+            max_col: max_price
+      - unique_combination:
+          arguments:
+            columns: ['event_date', 'event_hour', 'instrument', 'side', 'region', 'warehouse_city']
+
+  - name: fix_region_prices_daily
+    description: "Global FIX price vs regional price comparison with spread"
+    columns:
+      - name: trade_date
+        tests:
+          - not_null
+      - name: instrument
+        tests:
+          - not_null
+      - name: side
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['buy', 'sell']
+      - name: region
+        tests:
+          - not_null
+    tests:
+      - price_consistency:
+          arguments:
+            min_col: regional_min_price
+            avg_col: regional_avg_price
+            max_col: regional_max_price
+      - price_consistency:
+          arguments:
+            min_col: global_min_price
+            avg_col: global_avg_price
+            max_col: global_max_price
+
+  - name: events_lineage
+    description: "Source Parquet files per table and date for lineage tracking"
+    columns:
+      - name: source_table
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['fix_events', 'regional_events']
+      - name: event_date
+        tests:
+          - not_null
+      - name: count
+        tests:
+          - not_null
+          - positive_value

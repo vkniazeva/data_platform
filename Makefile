@@ -1,4 +1,13 @@
-.PHONY: up down status logs-redpanda logs-seaweedfs topics delete-topics consume-fix consume-events generator ingestion clickhouse init-clickhouse
+.PHONY: up down status logs-redpanda logs-seaweedfs topics delete-topics consume-fix consume-events generator ingestion clickhouse init-clickhouse start
+
+start: up
+	@echo "Waiting for Redpanda to be ready..."
+	@until docker compose exec redpanda-0 rpk cluster info > /dev/null 2>&1; do sleep 2; done
+	-$(MAKE) topics
+	-$(MAKE) register-schemas
+	@echo "Waiting for ClickHouse to be ready..."
+	@until docker compose exec -T clickhouse clickhouse-client --password clickhouse -q "SELECT 1" > /dev/null 2>&1; do sleep 2; done
+	-$(MAKE) init-clickhouse
 
 up:
 	docker compose up -d
@@ -47,7 +56,7 @@ generator:
 	python -m generator.main
 
 ingestion:
-	python -m ingestion.main
+	python -m ingestion.pipeline
 
 compact:
 	python -m ingestion.compaction

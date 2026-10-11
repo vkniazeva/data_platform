@@ -137,11 +137,18 @@ Every row in every layer carries `source_file` (S3 path of the Parquet file it c
 
 ## Ingestion pipeline
 
-The pipeline runs as a single orchestrated process (`python -m ingestion.pipeline`). Each Kafka topic has a dedicated worker thread:
+The pipeline runs as a single orchestrated process (`python -m ingestion.pipeline`). It manages three threads:
+
+- **Worker threads** (one per topic): consume Kafka, parse, buffer, flush to S3, insert into ClickHouse, commit offset
+- **dbt thread**: runs `dbt run` every 30 seconds, rebuilding all silver and gold models from bronze
 
 ```
 Kafka poll → parse → buffer (100 messages) → S3 flush → ClickHouse insert → commit offset
+                                                                          ↑
+                                              dbt thread (every 30 sec) ──┘ silver + gold
 ```
+
+**End-to-end latency (event → visible in gold):** ~35 seconds worst case (buffer fill ~5 sec + dbt interval 30 sec).
 
 **Partition strategy:**
 - `market.fix.raw` — 4 partitions, key: `metal_id`
@@ -178,7 +185,16 @@ Transformations are managed with **dbt** in `transforms/`. Three layers:
 
 **Silver** — typed, renamed, deduplicated. FIX protocol tags mapped to human-readable names. Timestamps parsed from FIX format (`YYYYMMDD-HH:MM:SS.mmm`). Deduplication via `QUALIFY ROW_NUMBER()` on natural key.
 
-**Gold** — aggregates for analytics: daily trade volume, regional price summary, delivery summary.
+**Gold** — aggregates for analytics, rebuilt automatically every 30 seconds by the pipeline's dbt thread:
+
+| Model | Description |
+|-------|-------------|
+| `fix_daily_summary` | Daily FIX trade aggregates per instrument and side |
+| `fix_hourly_summary` | Hourly FIX aggregates with time-of-day bucket |
+| `regional_events_daily_summary` | Daily regional aggregates per instrument, region, warehouse |
+| `regional_events_hourly` | Hourly regional aggregates with time-of-day bucket |
+| `fix_region_prices_daily` | Global FIX price vs regional price with spread |
+| `events_lineage` | Source Parquet files per date and table for lineage tracking |
 
 ### conditions field versioning
 
@@ -215,14 +231,14 @@ Measured on a laptop (Apple M-series, Docker).
 | ClickHouse insert (100 rows) | 55–70 ms |
 | Schema Registry validation overhead | negligible (cached after first lookup) |
 
-**End-to-end latency (event → visible in ClickHouse):**
-| Load | Latency |
-|------|---------|
-| Steady state (~36 msg/sec) | ~2–4 sec |
-| Peak load (40 msg/sec total) | ~5 sec |
-| Backlog catch-up | < 100 ms per batch |
+**End-to-end latency:**
+| Layer | Latency |
+|-------|---------|
+| Event → bronze (ClickHouse) | ~2–5 sec (buffer fill time) |
+| Event → gold (dbt) | ~35 sec worst case (buffer + dbt interval) |
+| Backlog catch-up → bronze | < 100 ms per batch |
 
-Latency is dominated by buffer fill time (100 messages). To reduce latency at peak load, lower the buffer size from 100 to 20–50 messages — trades higher S3/CH call frequency for lower latency.
+Bronze latency is dominated by buffer fill time (100 messages). Gold latency is dominated by the 30-second dbt interval — lower it in `dbt_executor` if fresher analytics are needed.
 
 ## Quick start
 
@@ -320,6 +336,8 @@ make down
 - [x] Schema Registry + DLQ
 - [x] Immutable Parquet with daily compaction
 - [x] Silver layer (dbt)
-- [ ] Gold layer (dbt)
+- [x] Gold layer (dbt) — 6 models, auto-refreshed every 30 sec via pipeline
+- [x] dbt tests — 78 tests across silver and gold
 - [ ] Spark and Iceberg experiments
 - [ ] API data processing
+- [ ] Superset dashboards

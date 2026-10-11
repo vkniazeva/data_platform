@@ -1,0 +1,69 @@
+version: 2
+
+models:
+  - name: fix_events
+    description: "Parsed and deduplicated FIX 4.4 trade execution reports"
+    columns:
+      - name: execution_id
+        description: "Natural business key from FIX tag 17"
+        tests:
+          - not_null
+          - unique
+      - name: instrument
+        tests:
+          - not_null
+      - name: side
+        description: "1 = buy, 2 = sell"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2]
+      - name: quantity
+        tests:
+          - not_null
+          - positive_value
+      - name: price
+        tests:
+          - not_null
+          - positive_value
+      - name: event_timestamp
+        tests:
+          - not_null
+      - name: source_file
+        tests:
+          - not_null
+
+  - name: regional_events
+    description: "Parsed and deduplicated regional price quotes"
+    columns:
+      - name: execution_id
+        tests:
+          - not_null
+          - unique
+      - name: instrument
+        tests:
+          - not_null
+      - name: side
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['buy', 'sell']
+      - name: quantity
+        tests:
+          - not_null
+          - positive_value
+      - name: price
+        tests:
+          - not_null
+          - positive_value
+      - name: region
+        tests:
+          - not_null
+      - name: event_timestamp
+        tests:
+          - not_null
+      - name: source_file
+        tests:
+          - not_null

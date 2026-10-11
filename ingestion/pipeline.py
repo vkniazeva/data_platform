@@ -1,5 +1,6 @@
 import os
 import signal
+import subprocess
 import threading
 import time
 
@@ -24,6 +25,8 @@ stop_event = threading.Event()
 
 _schema_registry = SchemaRegistryClient(url=os.getenv("SCHEMA_REGISTRY_URL", "http://localhost:8081"))
 _dlq_producer = DlqProducer(bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:19092"))
+
+DBT_PROJECT_DIR = os.path.join(os.path.dirname(__file__), '..', 'transforms')
 
 WORKERS = [
     {
@@ -123,11 +126,24 @@ def worker(config: dict) -> None:
 def handler(signum, frame):
     stop_event.set()
 
+def dbt_executor():
+    while not stop_event.is_set():
+        stop_event.wait(30)
+        if stop_event.is_set():
+            break
+        logger.info("[dbt] running transforms...")
+        try:
+            subprocess.run(["dbt", "run"], cwd=DBT_PROJECT_DIR, check=True)
+            logger.info("[dbt] done")
+        except subprocess.CalledProcessError as e:
+            logger.error(f"[dbt] failed: {e}")
+
 
 def main():
     logging.basicConfig(level=logging.INFO)
     signal.signal(signal.SIGINT, handler)
-    threads = [threading.Thread(target=worker, args=(cfg,)) for cfg in WORKERS]
+    threads = [threading.Thread(target=worker, daemon=True, args=(cfg,)) for cfg in WORKERS]
+    threads.append(threading.Thread(target=dbt_executor, daemon=True))
     for t in threads:
         t.start()
     for t in threads:
