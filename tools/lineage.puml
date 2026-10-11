@@ -1,0 +1,28 @@
+@startuml
+left to right direction
+skinparam defaultTextAlignment center
+
+package "silver" #c0c0c0 {
+    database "regional_events" as regional_events
+    database "fix_events" as fix_events
+}
+
+package "gold" #ffd700 {
+    database "fix_region_prices_daily" as fix_region_prices_daily
+    database "fix_hourly_summary\n<size:10>grain: trade_date, trade_hour, instrument, side</size>" as fix_hourly_summary
+    database "fix_daily_summary\n<size:10>grain: trade_date, instrument, side</size>" as fix_daily_summary
+    database "events_lineage" as events_lineage
+    database "regional_events_daily_summary\n<size:10>grain: event_date, instrument, side, region, warehouse_city</size>" as regional_events_daily_summary
+    database "regional_events_hourly\n<size:10>grain: event_date, event_hour, instrument, side, region, warehouse_city</size>" as regional_events_hourly
+}
+
+fix_events --> fix_region_prices_daily
+regional_events --> fix_region_prices_daily
+fix_events --> fix_hourly_summary
+fix_events --> fix_daily_summary
+fix_events --> events_lineage
+regional_events --> events_lineage
+regional_events --> regional_events_daily_summary
+regional_events --> regional_events_hourly
+
+@enduml
