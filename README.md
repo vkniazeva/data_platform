@@ -31,14 +31,16 @@ flowchart LR
 
     subgraph pipeline["Ingestion Pipeline"]
         P1["Schema\nvalidation"]
-        P2["Parse +\nbuffer"]
+        P1H["Header\nrules"]
+        P2["Parse +\ncontent rules"]
         P3["S3 flush\nParquet"]
         P4["ClickHouse\ninsert"]
         P5["Commit\noffset"]
     end
 
     subgraph storage["Storage"]
-        S1[("MinIO / S3\nraw Parquet")]
+        S1[("SeaweedFS / S3\nraw Parquet")]
+        S2[("SeaweedFS / S3\nquarantine")]
         CH1[("ClickHouse\nbronze")]
     end
 
@@ -54,8 +56,12 @@ flowchart LR
     K1 --> P1
     K2 --> P1
     P1 -->|invalid| K3
-    P1 -->|valid| P2
-    P2 --> P3
+    P1 -->|valid| P1H
+    P1H -->|invalid| K3
+    P1H -->|valid| P2
+    P2 -->|invalid| K3
+    P2 -->|invalid| S2
+    P2 -->|valid| P3
     P3 --> S1
     P3 --> P4
     P4 --> CH1
@@ -70,18 +76,23 @@ flowchart TD
     msg["Kafka message"]
 
     msg --> hdr{has\nschema_id\nheader?}
-    hdr -->|no| req{requires\nschema?}
-    req -->|yes| dlq1[["DLQ\nmissing_schema_id"]]
-    req -->|no| parse
+    hdr -->|no| dlq1[["DLQ\nmissing_schema_id"]]
+    hdr -->|yes| reg["Schema Registry\nvalidate content"]
+    reg -->|unknown id| dlq2[["DLQ\nunknown_schema_id"]]
+    reg -->|contract violation| dlq3[["DLQ\nschema_validation_error"]]
+    reg -->|valid| hval
 
-    hdr -->|yes| cache{schema_id\nin cache?}
-    cache -->|yes| parse
-    cache -->|no| reg["Schema Registry\nGET /schemas/ids/:id"]
-    reg -->|200 OK| parse
-    reg -->|not found| dlq2[["DLQ\nunknown_schema_id"]]
+    hval["Level 1\nheader rules\nidempotency_key · event_type\nmetal · region"]
+    hval -->|invalid| dlq4[["DLQ\ninvalid_header"]]
+    hval -->|valid| parse
 
-    parse["parse event"] --> buf["buffer\n(100 msgs)"]
-    buf -->|not full,\nsame date| poll["poll next"]
+    parse["parse event"] --> cval
+
+    cval["Level 2\ncontent rules\nmandatory fields · types\nbusiness constraints"]
+    cval -->|invalid| quar[["Quarantine Parquet\n+ DLQ\ninvalid_content"]]
+    cval -->|valid| buf
+
+    buf["buffer\n(100 msgs)"] -->|not full,\nsame date| poll["poll next"]
     buf -->|full or\ndate changed| flush["flush Parquet\nto S3"]
     flush --> ch["ClickHouse\ninsert"]
     ch --> commit["commit\nKafka offset"]
