@@ -1,31 +1,43 @@
 import logging
+import os
 import random
 from time import sleep
 
+from dotenv import load_dotenv
+
+from config import TOPIC_FIX_RAW, TOPIC_EVENTS, SCHEMA_IDS
 from generator.data_generator.api_generator import generate_stock_request
 from generator.data_generator.event_generator import generate_kafka_event
+from generator.error_injector import ErrorInjector
 from generator.sender.api_sender import ApiSender
 from generator.sender.kafka_sender import KafkaSender
 
+load_dotenv()
+
 KAFKA_STATE = {
-    "trade_execution_report": {"message_number": 1, "topic": "market.fix.raw"},
-    "regional_price_quote": {"message_number": 1, "topic": "market.events"}
+    "trade_execution_report": {"message_number": 1, "topic": TOPIC_FIX_RAW},
+    "regional_price_quote":   {"message_number": 1, "topic": TOPIC_EVENTS},
 }
 
 API_MESSAGE_NUMBER = 1
 
 
+_error_injector = ErrorInjector()
+_ERROR_RATE = 0.05
+
+
 def send_next_event(kafka_sender: KafkaSender, event_type: str) -> None:
     event_config = KAFKA_STATE[event_type]
     message_number = event_config["message_number"]
+    topic = event_config["topic"]
 
     event = generate_kafka_event(event_type=event_type, message_number=message_number)
 
     duplicate_count = random.choices(population=[0, 1, 2], weights=[80, 15, 5])[0]
 
-    for _ in range(duplicate_count+1):
-        schema_ids = {"market.events": 1, "market.fix.raw": 2}
-        kafka_sender.send(topic=event_config["topic"], event=event, schema_id=schema_ids.get(event_config["topic"]))
+    outgoing = _error_injector.inject(event, topic) if random.random() < _ERROR_RATE else event
+    for _ in range(duplicate_count + 1):
+        kafka_sender.send(topic=topic, event=outgoing, schema_id=SCHEMA_IDS.get(topic))
 
     event_config["message_number"] += 1
 
@@ -46,7 +58,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
-    kafka_sender = KafkaSender(bootstrap_servers="localhost:19092")
+    kafka_sender = KafkaSender(bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS"))
     # api_sender = ApiSender(base_url="http://localhost:8000")
 
     count = 0

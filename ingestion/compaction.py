@@ -10,11 +10,14 @@ import pyarrow.parquet as pq
 from dotenv import load_dotenv
 
 import logging
+
+from config import TOPIC_FIX_RAW, TOPIC_EVENTS
+
 logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-TOPICS = ["market.fix.raw", "market.events"]
+TOPICS = [TOPIC_FIX_RAW, TOPIC_EVENTS]
 MANIFEST_KEY = "compaction_manifest.json"
 _VERSION_RE = re.compile(r"compacted\.v(\d+)\.parquet$")
 

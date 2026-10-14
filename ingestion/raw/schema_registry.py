@@ -1,3 +1,4 @@
+import json
 import requests
 import logging
 
@@ -7,18 +8,22 @@ logger = logging.getLogger(__name__)
 class SchemaRegistryClient:
     def __init__(self, url: str):
         self._url = url.rstrip("/")
-        self._cache: set[int] = set()
+        self._cache: dict[int, dict] = {}
 
     def schema_exists(self, schema_id: int) -> bool:
+        return self.get_schema(schema_id) is not None
+
+    def get_schema(self, schema_id: int) -> dict | None:
         if schema_id in self._cache:
-            return True
+            return self._cache[schema_id]
         try:
             response = requests.get(f"{self._url}/schemas/ids/{schema_id}", timeout=2)
             if response.status_code == 200:
-                self._cache.add(schema_id)
-                return True
+                schema = json.loads(response.json()["schema"])
+                self._cache[schema_id] = schema
+                return schema
             logger.warning(f"Schema ID {schema_id} not found in registry: {response.status_code}")
-            return False
+            return None
         except Exception as e:
             logger.error(f"Schema Registry unreachable: {e}")
-            return False
+            return None

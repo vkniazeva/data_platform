@@ -156,26 +156,48 @@ Kafka poll → parse → buffer (100 messages) → S3 flush → ClickHouse inser
 - 2 active partitions per topic now, 2 reserved for horizontal scaling
 
 **Error handling:**
-- Graceful shutdown on Ctrl+C: buffer flushed before exit
+- Graceful shutdown on SIGINT/SIGTERM: clean + quarantine buffers flushed before exit
 - Worker crash recovery: automatic restart after 5 seconds
 - S3 write retry: up to 3 attempts with exponential backoff
 - Offset commit only after successful S3 + CH write
 
-**Schema validation and DLQ:**
+**Validation and routing:**
 
-Both topics validate incoming messages against a Schema Registry before processing. Each message must carry a `schema_id` header; messages that are missing it or reference an unknown schema are routed to a dead-letter topic instead of being processed.
+Every message passes two validation levels before it reaches the clean data path:
 
-| Topic | Schema ID | DLQ topic |
-|-------|-----------|-----------|
-| `market.fix.raw` | 2 | `market.fix.raw.dlq` |
-| `market.events` | 1 | `market.events.dlq` |
+- **Level 1 — schema + header rules**: schema contract (via Schema Registry) is validated first, then business rules on headers (known instruments, regions, event types, idempotency key format). Failures → DLQ.
+- **Level 2 — content rules**: mandatory fields, field types, and business constraints (price > 0, valid side, known currency). Failures → quarantine Parquet + DLQ so the producer can be notified and the data is preserved for inspection.
+
+Unknown fields and headers are intentionally ignored — tolerance for extra data is the correct strategy for schema evolution.
+
+See [`docs/contracts/`](docs/contracts/) for the full rules per event type.
+
+**S3 layout:**
+```
+{topic}/{YYYY-MM-DD}/{timestamp_ms}.parquet     ← clean events (pipeline)
+{topic}/{YYYY-MM-DD}/compacted.vN.parquet       ← compacted (daily job)
+quarantine/{topic}/{YYYY-MM-DD}/{ts}.parquet    ← content-invalid events
+```
+
+**Error injection (generator):**
+
+The generator intentionally corrupts ~5% of messages (one error type per message) to exercise the validation paths end-to-end. All duplicates of a corrupted message carry the same corruption — matching real at-most-once producer retry semantics.
 
 Schema IDs are registered once at setup:
 ```bash
 make register-schemas
 ```
 
-The `SchemaRegistryClient` caches known IDs in memory — Registry is only hit once per unique schema_id. DLQ messages carry an extra `dlq_reason` header (`missing_schema_id` or `unknown_schema_id:<id>`) for inspection.
+DLQ messages carry a `dlq_reason` header for inspection:
+
+| Reason prefix | Source |
+|---|---|
+| `missing_schema_id` | no schema_id header |
+| `unknown_schema_id:<id>` | schema not in registry |
+| `schema_validation_error:<msg>` | jsonschema contract violation |
+| `invalid_header:<field>:<value>` | header business rule |
+| `missing_header:<field>` | required header absent |
+| `invalid_content:<rule>` | content business rule → also in quarantine |
 
 ## Data models
 
@@ -225,7 +247,7 @@ Measured on a laptop (Apple M-series, Docker).
 | Metric | Value |
 |--------|-------|
 | Throughput — backlog catch-up | ~265–446 msg/sec |
-| Throughput — steady state | ~36 msg/sec total (~18 per topic) |
+| Throughput — steady state | ~40 msg/sec total (~20 per topic) |
 | Message parse time | < 0.2 ms |
 | S3 write (100 messages, ~7 KB) | 5–15 ms |
 | ClickHouse insert (100 rows) | 55–70 ms |
@@ -281,7 +303,13 @@ Open http://localhost:8080
 aws --endpoint-url http://localhost:8333 s3 ls s3://raw-events/ --recursive
 ```
 
-**8. Tear down**
+**8. Generate data lineage diagram**
+```bash
+make lineage
+```
+Opens `tools/lineage.puml` in PyCharm with the PlantUML plugin to see model dependencies and grain.
+
+**9. Tear down**
 ```bash
 make down
 ```
@@ -338,6 +366,9 @@ make down
 - [x] Silver layer (dbt)
 - [x] Gold layer (dbt) — 6 models, auto-refreshed every 30 sec via pipeline
 - [x] dbt tests — 78 tests across silver and gold
+- [x] Data lineage diagram (PlantUML, auto-generated from dbt manifest)
+- [x] Two-level validation — schema + header rules (DLQ) + content rules (quarantine + DLQ)
+- [x] Error injection in generator (~5% corrupt messages for end-to-end validation testing)
 - [ ] Spark and Iceberg experiments
 - [ ] API data processing
 - [ ] Superset dashboards

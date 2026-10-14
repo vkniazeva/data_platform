@@ -1,3 +1,6 @@
+import json
+
+import jsonschema
 from confluent_kafka import Consumer
 
 import logging
@@ -45,12 +48,32 @@ class KafkaConsumer:
                 return False
             return True
 
-        if self._schema_registry:
-            if not self._schema_registry.schema_exists(int(schema_id)):
-                logger.warning(f"[{self.topic}] Unknown schema_id {schema_id} — sending to DLQ")
-                if self._dlq_producer:
-                    self._dlq_producer.send(msg, reason=f"unknown_schema_id:{schema_id}")
-                return False
+        if not self._schema_registry:
+            return True
+
+        schema = self._schema_registry.get_schema(int(schema_id))
+        if schema is None:
+            logger.warning(f"[{self.topic}] Unknown schema_id {schema_id} — sending to DLQ")
+            if self._dlq_producer:
+                self._dlq_producer.send(msg, reason=f"unknown_schema_id:{schema_id}")
+            return False
+
+        return self._validate_content(msg, schema, schema_id)
+
+    def _validate_content(self, msg, schema: dict, schema_id: str) -> bool:
+        try:
+            raw = msg.value().decode("utf-8")
+            content = json.loads(raw) if schema.get("type") == "object" else raw
+            jsonschema.validate(instance=content, schema=schema)
+        except jsonschema.ValidationError as e:
+            reason = f"schema_validation_error:{e.message}"
+            logger.warning(f"[{self.topic}] Schema validation failed — sending to DLQ: {e.message}")
+            if self._dlq_producer:
+                self._dlq_producer.send(msg, reason=reason)
+            return False
+        except Exception as e:
+            logger.error(f"[{self.topic}] Unexpected error during content validation: {e}")
+            return False
 
         logger.debug(f"Message schema_id: {schema_id}, topic: {self.topic}, partition: {msg.partition()}")
         return True

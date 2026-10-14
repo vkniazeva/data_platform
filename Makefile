@@ -58,6 +58,9 @@ generator:
 ingestion:
 	python -m ingestion.pipeline
 
+lineage:
+	python -m tools.lineage
+
 compact:
 	python -m ingestion.compaction
 

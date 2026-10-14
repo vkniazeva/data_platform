@@ -1,0 +1,12 @@
+mandatory_fields: [execution_id, instrument, side, quantity, price, currency, event_timestamp, conditions]
+
+business_rules:
+  side:
+    allowed_values: [buy, sell]
+  quantity:
+    min: 1
+  price:
+    type: float
+    min: 0.01
+  currency:
+    allowed_values: [USD, EUR, GBP]

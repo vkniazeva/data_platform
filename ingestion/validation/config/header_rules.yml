@@ -1,0 +1,10 @@
+known_metals: [CA, AH, ZS, NI, PB, SN]
+
+known_event_types:
+  - trade_execution_report
+  - regional_price_quote
+
+idempotency_key_pattern: "^EX(-[A-Z]{2})?-\\d+$"
+
+known_regions_by_topic:
+  market.events: [ME, EU, AS]

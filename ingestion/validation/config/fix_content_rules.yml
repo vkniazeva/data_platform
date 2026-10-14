@@ -1,0 +1,11 @@
+mandatory_fields: ["17", "55", "54", "32", "31", "60"]
+
+business_rules:
+  "54":
+    allowed_values: ["1", "2"]
+  "32":
+    type: int
+    min: 1
+  "31":
+    type: float
+    min: 0.01

@@ -8,6 +8,7 @@ import boto3
 import clickhouse_connect
 from dotenv import load_dotenv
 
+from config import TOPIC_FIX_RAW, TOPIC_EVENTS, GROUP_FIX, GROUP_EVENTS
 from ingestion.loader.bronze_loader import BronzeLoader
 from ingestion.raw.consumer import KafkaConsumer
 from ingestion.raw.dlq_producer import DlqProducer
@@ -15,6 +16,9 @@ from ingestion.raw.parser.fix_parser import parse_fix_event, return_fix_event_da
 from ingestion.raw.parser.regional_parser import parse_regional_event, return_regional_event_date
 from ingestion.raw.schema_registry import SchemaRegistryClient
 from ingestion.raw.writer import ParquetWriter
+from ingestion.raw.writer.quarantine_writer import QuarantineWriter
+from ingestion.validation.content_validator import ContentValidator
+from ingestion.validation.header_validator import HeaderValidator
 
 import logging
 logger = logging.getLogger(__name__)
@@ -23,15 +27,15 @@ load_dotenv()
 
 stop_event = threading.Event()
 
-_schema_registry = SchemaRegistryClient(url=os.getenv("SCHEMA_REGISTRY_URL", "http://localhost:8081"))
-_dlq_producer = DlqProducer(bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:19092"))
+_schema_registry = SchemaRegistryClient(url=os.getenv("SCHEMA_REGISTRY_URL"))
+_dlq_producer = DlqProducer(bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS"))
 
 DBT_PROJECT_DIR = os.path.join(os.path.dirname(__file__), '..', 'transforms')
 
 WORKERS = [
     {
-        "topic": "market.fix.raw",
-        "group_id": "fix_event_consumer",
+        "topic": TOPIC_FIX_RAW,
+        "group_id": GROUP_FIX,
         "parser": parse_fix_event,
         "date_parser": return_fix_event_date,
         "loader_method": "load_fix_events",
@@ -40,8 +44,8 @@ WORKERS = [
         "requires_schema": True,
     },
     {
-        "topic": "market.events",
-        "group_id": "regional_price_consumer",
+        "topic": TOPIC_EVENTS,
+        "group_id": GROUP_EVENTS,
         "parser": parse_regional_event,
         "date_parser": return_regional_event_date,
         "loader_method": "load_regional_events",
@@ -75,7 +79,7 @@ def run_worker(topic: str, group_id: str, parser, date_parser, loader_method: st
     kafka_consumer = KafkaConsumer(
         topic=topic,
         group_id=group_id,
-        bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:19092"),
+        bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS"),
         schema_registry=schema_registry,
         dlq_producer=dlq_producer,
         requires_schema=requires_schema,
@@ -83,16 +87,35 @@ def run_worker(topic: str, group_id: str, parser, date_parser, loader_method: st
     kafka_consumer.subscribe_topic()
 
     writer = ParquetWriter(topic)
+    quarantine_writer = QuarantineWriter(topic)
     bronze_loader = BronzeLoader(_make_s3_client(), _make_ch_client())
     load = getattr(bronze_loader, loader_method)
+    header_validator = HeaderValidator()
+    content_validator = ContentValidator()
 
     msg_count = 0
     t_start = time.monotonic()
 
     for msg in kafka_consumer.consume_messages(stop_event):
         try:
+            headers = {k: v.decode("utf-8") for k, v in (msg.headers() or [])}
+            kafka_key = msg.key().decode("utf-8") if msg.key() else ""
+            result = header_validator.validate(topic, headers, kafka_key)
+            if not result.valid:
+                logger.warning(f"[{topic}] Header validation failed: {result.reason} — sending to DLQ")
+                dlq_producer.send(msg, reason=result.reason)
+                continue
+
             event = parser(msg.value())
             event_date = date_parser(event)
+
+            content_result = content_validator.validate(topic, event)
+            if not content_result.valid:
+                logger.warning(f"[{topic}] Content validation failed: {content_result.reason} — quarantine + DLQ")
+                quarantine_writer.write(event, event_date, content_result.reason, msg)
+                dlq_producer.send(msg, reason=f"invalid_content:{content_result.reason}")
+                continue
+
             flushed_key = writer.write_to_buffer(event, event_date, msg)
             if flushed_key:
                 load(flushed_key)
@@ -106,6 +129,7 @@ def run_worker(topic: str, group_id: str, parser, date_parser, loader_method: st
         except Exception as e:
             logger.error(f"[{topic}] Error processing message: {e}", exc_info=True)
 
+    quarantine_writer.flush_remaining()
     final_key = writer.flush(writer.current_date)
     if final_key:
         load(final_key)
@@ -124,6 +148,7 @@ def worker(config: dict) -> None:
 
 
 def handler(signum, frame):
+    logger.info(f"Received signal {signum}, shutting down gracefully...")
     stop_event.set()
 
 def dbt_executor():
@@ -142,6 +167,7 @@ def dbt_executor():
 def main():
     logging.basicConfig(level=logging.INFO)
     signal.signal(signal.SIGINT, handler)
+    signal.signal(signal.SIGTERM, handler)
     threads = [threading.Thread(target=worker, daemon=True, args=(cfg,)) for cfg in WORKERS]
     threads.append(threading.Thread(target=dbt_executor, daemon=True))
     for t in threads:
