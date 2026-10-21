@@ -19,6 +19,7 @@ class KafkaSender:
         self._delivery_errors = []
 
     def _on_delivery_callback(self, err, msg) -> None:
+        """Collect delivery errors; called by confluent-kafka after each produce attempt."""
         if err is not None:
             self._delivery_errors.append(str(err))
             logger.error(f"Message is delivered with an error: {err}")
@@ -26,6 +27,7 @@ class KafkaSender:
             logger.debug(f"Message delivered to partition {msg.partition()}")
 
     def send(self, topic: str, event: dict, schema_id: int = None) -> None:
+        """Produce an event to Kafka, appending schema_id to headers if provided."""
         value = event["value"]
 
         if isinstance(value, dict):
@@ -46,6 +48,7 @@ class KafkaSender:
         self._producer.poll(0)
 
     def flush(self) -> None:
+        """Wait for all in-flight messages to be delivered; raises on any delivery error."""
         unprocessed_messages = self._producer.flush()
         if unprocessed_messages > 0:
             logger.warning(f"Number of not processed messages: {unprocessed_messages}")

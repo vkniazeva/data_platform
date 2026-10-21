@@ -11,9 +11,11 @@ class SchemaRegistryClient:
         self._cache: dict[int, dict] = {}
 
     def schema_exists(self, schema_id: int) -> bool:
+        """Return True if a schema with this ID exists in the registry."""
         return self.get_schema(schema_id) is not None
 
     def get_schema(self, schema_id: int) -> dict | None:
+        """Fetch schema by ID from cache or registry API; returns None if unknown or unreachable."""
         if schema_id in self._cache:
             return self._cache[schema_id]
         try:

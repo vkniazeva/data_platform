@@ -23,11 +23,13 @@ _VERSION_RE = re.compile(r"compacted\.v(\d+)\.parquet$")
 
 
 def _version(key: str) -> int | None:
+    """Extract version number from a compacted Parquet filename (e.g. compacted.v3.parquet → 3)."""
     m = _VERSION_RE.search(key)
     return int(m.group(1)) if m else None
 
 
 def get_latest_compacted_key(s3, bucket: str, topic: str, partition_date: str) -> str | None:
+    """Return the S3 key of the highest-versioned compacted file for a topic/date partition, or None."""
     prefix = f"{topic}/{partition_date}/"
     paginator = s3.get_paginator("list_objects_v2")
     versioned = [
@@ -42,6 +44,7 @@ def get_latest_compacted_key(s3, bucket: str, topic: str, partition_date: str) -
 
 
 def compact_partition(s3, bucket: str, topic: str, partition_date: str) -> None:
+    """Merge flush files with the previous compacted version, verify row count, write new version, then delete originals."""
     prefix = f"{topic}/{partition_date}/"
 
     paginator = s3.get_paginator("list_objects_v2")
@@ -128,6 +131,7 @@ def compact_partition(s3, bucket: str, topic: str, partition_date: str) -> None:
 
 
 def main(target_date: str | None = None) -> None:
+    """Run compaction for all topics on target_date (defaults to yesterday)."""
     logging.basicConfig(level=logging.INFO)
 
     if target_date is None:
@@ -144,6 +148,7 @@ def main(target_date: str | None = None) -> None:
 
 
 def _make_s3_client():
+    """Build a boto3 S3 client pointed at SeaweedFS using env config."""
     return boto3.client(
         "s3",
         endpoint_url=os.getenv("SEAWEED_ENDPOINT_URL"),

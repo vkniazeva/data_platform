@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 def main():
+    """List all Parquet files in S3 and load them into bronze ClickHouse tables via two parallel threads."""
     logging.basicConfig(level=logging.INFO)
     s3_client = boto3.client(
         "s3",
@@ -35,6 +36,7 @@ def main():
 
 
 def process_fix_events(s3_client, fix_files: list):
+    """Create a ClickHouse client and load all FIX event Parquet files into bronze.fix_events."""
     ch_client = clickhouse_connect.get_client(
         host=os.getenv("CLICKHOUSE_HOST"),
         port=int(os.getenv("CLICKHOUSE_PORT")),
@@ -49,6 +51,7 @@ def process_fix_events(s3_client, fix_files: list):
 
 
 def process_regional_events(s3_client, regional_files: list):
+    """Create a ClickHouse client and load all regional event Parquet files into bronze.regional_events."""
     ch_client = clickhouse_connect.get_client(
         host=os.getenv("CLICKHOUSE_HOST"),
         port=int(os.getenv("CLICKHOUSE_PORT")),

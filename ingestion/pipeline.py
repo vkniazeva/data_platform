@@ -57,6 +57,7 @@ WORKERS = [
 
 
 def _make_s3_client():
+    """Build a boto3 S3 client pointed at SeaweedFS using env config."""
     return boto3.client(
         "s3",
         endpoint_url=os.getenv("SEAWEED_ENDPOINT_URL"),
@@ -66,6 +67,7 @@ def _make_s3_client():
 
 
 def _make_ch_client():
+    """Build a ClickHouse client using env config."""
     return clickhouse_connect.get_client(
         host=os.getenv("CLICKHOUSE_HOST"),
         port=int(os.getenv("CLICKHOUSE_PORT")),
@@ -76,6 +78,7 @@ def _make_ch_client():
 
 def run_worker(topic: str, group_id: str, parser, date_parser, loader_method: str,
                schema_registry=None, dlq_producer=None, requires_schema: bool = False) -> None:
+    """Consume one Kafka topic: validate → parse → buffer → S3 → ClickHouse → commit offset."""
     kafka_consumer = KafkaConsumer(
         topic=topic,
         group_id=group_id,
@@ -138,6 +141,7 @@ def run_worker(topic: str, group_id: str, parser, date_parser, loader_method: st
 
 
 def worker(config: dict) -> None:
+    """Wrap run_worker with auto-restart on crash (5-second delay between retries)."""
     while not stop_event.is_set():
         try:
             run_worker(**config)
@@ -148,10 +152,12 @@ def worker(config: dict) -> None:
 
 
 def handler(signum, frame):
+    """Handle SIGINT/SIGTERM by setting the stop event for graceful shutdown."""
     logger.info(f"Received signal {signum}, shutting down gracefully...")
     stop_event.set()
 
 def dbt_executor():
+    """Run dbt transforms every 30 seconds until the stop event is set."""
     while not stop_event.is_set():
         stop_event.wait(30)
         if stop_event.is_set():
@@ -165,6 +171,7 @@ def dbt_executor():
 
 
 def main():
+    """Start worker threads (one per topic) and dbt executor as daemon threads."""
     logging.basicConfig(level=logging.INFO)
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)

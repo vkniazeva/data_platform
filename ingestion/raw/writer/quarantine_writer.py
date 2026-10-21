@@ -29,6 +29,7 @@ class QuarantineWriter:
         )
 
     def write(self, event: dict, event_date: str, validation_error: str, msg) -> None:
+        """Buffer a rejected event with its validation error and Kafka metadata; flushes on date change or 100 records."""
         headers = {k: v.decode("utf-8") for k, v in (msg.headers() or [])}
         record = {
             **{str(k): str(v) for k, v in event.items()},
@@ -49,6 +50,7 @@ class QuarantineWriter:
             self._flush(event_date)
 
     def _flush(self, event_date: str) -> None:
+        """Serialize buffer to Parquet and upload to quarantine prefix in S3."""
         if not self._buffer:
             return
 
@@ -68,5 +70,6 @@ class QuarantineWriter:
         self._buffer = []
 
     def flush_remaining(self) -> None:
+        """Flush any buffered records to S3 on graceful shutdown."""
         if self._buffer and self._current_date:
             self._flush(self._current_date)

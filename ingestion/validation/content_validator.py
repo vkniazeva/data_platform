@@ -13,6 +13,7 @@ _RULES_BY_TOPIC = {
 
 
 def _load_rules(path: Path) -> dict:
+    """Load YAML validation rules from disk."""
     with open(path) as f:
         return yaml.safe_load(f)
 
@@ -25,6 +26,7 @@ class ContentValidator:
         }
 
     def validate(self, topic: str, event: dict) -> ValidationResult:
+        """Check mandatory fields, field types, and business constraints for the given topic's rules."""
         rules = self._rules.get(topic)
         if not rules:
             return ValidationResult(valid=True)

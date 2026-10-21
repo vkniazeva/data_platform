@@ -14,6 +14,7 @@ class BronzeLoader:
         self.ch_client = ch_client
 
     def load_fix_events(self, s3_path: str) -> None:
+        """Read a Parquet file from S3 and insert its rows into bronze.fix_events; skips corrupted files."""
         t_0 = time.monotonic()
         response = self.s3_client.get_object(Bucket="raw-events", Key=s3_path)
         body = response["Body"].read()
@@ -35,6 +36,7 @@ class BronzeLoader:
         logger.info(f"Raw data insert time: {t_insert * 1000:.1f} ms")
 
     def load_regional_events(self, s3_path: str) -> None:
+        """Read a Parquet file from S3 and insert its rows into bronze.regional_events; skips corrupted files."""
         t_0 = time.monotonic()
         response = self.s3_client.get_object(Bucket="raw-events", Key=s3_path)
         body = response["Body"].read()

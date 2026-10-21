@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def _generate_fix_body(message_number:int) -> tuple[str, str]:
+    """Build a pipe-delimited FIX 4.4 message body; returns (message_str, metal_id)."""
 
     now = datetime.now(timezone.utc)
     event_timestamp = now.strftime("%Y%m%d-%H:%M:%S.%f")[:-3]
@@ -54,6 +55,7 @@ def _generate_fix_body(message_number:int) -> tuple[str, str]:
     return "|".join(fields) + "|", metal_id
 
 def _generate_fix_event(message_number: int, event_type: str) -> dict:
+    """Wrap a FIX message body in a Kafka event envelope with key and headers."""
     event_id = f"EX-{message_number:06d}"
     value, metal_id = _generate_fix_body(message_number)
 
@@ -71,6 +73,7 @@ def _generate_fix_event(message_number: int, event_type: str) -> dict:
     }
 
 def _generate_regional_event(message_number: int, event_type: str) -> dict:
+    """Generate a JSON regional market event with region-specific warehouse/delivery conditions."""
     region = random.choice(list(REGIONS))
     event_id = f"EX-{region}-{message_number:04d}"
     conditions = {}

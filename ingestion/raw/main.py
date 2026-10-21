@@ -18,6 +18,7 @@ load_dotenv()
 stop_event = threading.Event()
 
 def worker_fix():
+    """Run the FIX event consumer worker with auto-restart on crash."""
     topic = "market.fix.raw"
     group_id = "fix_event_consumer"
 
@@ -30,6 +31,7 @@ def worker_fix():
             time.sleep(5)
 
 def worker_regional():
+    """Run the regional event consumer worker with auto-restart on crash."""
     topic = "market.events"
     group_id = "regional_price_consumer"
 
@@ -42,6 +44,7 @@ def worker_regional():
             time.sleep(5)
 
 def create_worker(topic: str, group_id: str, parser, date_parser, parser_version: str, producer_id: str) -> None:
+    """Consume a Kafka topic, enrich each event with lineage, buffer to Parquet, and flush to S3."""
     bootstrap_servers = "localhost:19092"
 
     kafka_consumer = KafkaConsumer(topic=topic, group_id=group_id, bootstrap_servers=bootstrap_servers)
@@ -81,9 +84,11 @@ def create_worker(topic: str, group_id: str, parser, date_parser, parser_version
 
 
 def handler(signum, frame):
+    """Handle SIGINT/SIGTERM by setting the stop event."""
     stop_event.set()
 
 def main():
+    """Start FIX and regional consumer worker threads."""
     logging.basicConfig(level=logging.INFO)
     t1 = threading.Thread(target=worker_fix)
     t2 = threading.Thread(target=worker_regional)

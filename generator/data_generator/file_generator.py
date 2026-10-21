@@ -9,10 +9,12 @@ FILE_NUMBER = 0
 
 
 def _format_timestamp(timestamp: datetime) -> str:
+    """Format a datetime to ISO 8601 with millisecond precision and Z suffix."""
     return timestamp.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _get_or_create_route_state(barge_id: str, current_timestamp: datetime) -> dict:
+    """Return existing route state for a barge or initialize it with a randomized departure offset."""
     if barge_id in ROUTE_STATE:
         return ROUTE_STATE[barge_id]
 
@@ -36,6 +38,7 @@ def _get_or_create_route_state(barge_id: str, current_timestamp: datetime) -> di
 
 
 def generate_barge_position_file(current_timestamp: datetime) -> dict:
+    """Generate a batch of barge position records interpolated along a route for the given timestamp."""
     global FILE_NUMBER
 
     if current_timestamp.tzinfo is None:

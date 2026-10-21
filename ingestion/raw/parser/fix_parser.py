@@ -2,10 +2,7 @@ from datetime import datetime
 
 PARSER_VERSION = "1.0.0"
 def parse_fix_event(event: bytes) -> dict:
-    """
-    event value example:
-    8=FIX.4.4|35=8|34=2052|52=20261005-21:12:26.047|17=EX-002052|55=AH|54=1|32=33|31=2664.29|60=20261005-21:04:16.047|
-    """
+    """Parse a pipe-delimited FIX 4.4 message into a tag→value dict (e.g. {"17": "EX-002052", "55": "AH", ...})."""
     raw_value = event.decode("utf-8")
     parsed_event = raw_value.split("|")
     event_value_dict = {}
@@ -14,6 +11,7 @@ def parse_fix_event(event: bytes) -> dict:
     return event_value_dict
 
 def return_fix_event_date(event_value_dict: dict) -> str:
+    """Extract trade date from FIX tag 60 (TransactTime) as YYYY-MM-DD."""
     raw_date = event_value_dict["60"]
     dt_object = datetime.strptime(raw_date, "%Y%m%d-%H:%M:%S.%f")
     return datetime.strftime(dt_object, "%Y-%m-%d")

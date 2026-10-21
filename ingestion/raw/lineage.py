@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 def build_lineage(msg, parser_version: str, producer_id: str) -> dict:
+    """Return evidence bundle dict to merge into a parsed event before writing to Parquet."""
   schema_id = None
   if msg.headers():
       for key, value in msg.headers():

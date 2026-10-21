@@ -12,6 +12,7 @@ class DlqProducer:
         })
 
     def send(self, msg, reason: str) -> None:
+        """Forward message to its topic's DLQ with a dlq_reason header appended."""
         dlq_topic = f"{msg.topic()}.dlq"
         headers = list(msg.headers() or []) + [("dlq_reason", reason)]
         self._producer.produce(

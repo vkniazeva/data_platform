@@ -6,6 +6,7 @@ class ApiSender:
 
 
     def send_inventory_snapshot(self, request: dict) -> None:
+        """POST an inventory snapshot to the API; raises on non-2xx response."""
         response = requests.post(
             url=f"{self.base_url}/v1/inventory-snapshots",
             headers=request["headers"],

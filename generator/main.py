@@ -27,6 +27,7 @@ _ERROR_RATE = 0.05
 
 
 def send_next_event(kafka_sender: KafkaSender, event_type: str) -> None:
+    """Generate and send one Kafka event, optionally injecting an error and simulating duplicates."""
     event_config = KAFKA_STATE[event_type]
     message_number = event_config["message_number"]
     topic = event_config["topic"]
@@ -42,6 +43,7 @@ def send_next_event(kafka_sender: KafkaSender, event_type: str) -> None:
     event_config["message_number"] += 1
 
 def send_next_api_request(api_sender: ApiSender) -> None:
+    """Generate and send one inventory snapshot API request, simulating duplicates."""
     global API_MESSAGE_NUMBER
     inventory_request = generate_stock_request(API_MESSAGE_NUMBER)
 
@@ -55,6 +57,7 @@ def send_next_api_request(api_sender: ApiSender) -> None:
 
 
 def main():
+    """Run an infinite loop sending random Kafka events with periodic flush."""
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 

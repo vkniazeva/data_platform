@@ -33,6 +33,7 @@ class ParquetWriter:
 
 
     def flush(self, event_date: str) -> str | None:
+        """Serialize the buffer to Parquet and upload to S3; returns the S3 key or None if buffer was empty."""
         if not self._buffer:
             return None
 
@@ -84,6 +85,7 @@ class ParquetWriter:
 
 
     def write_to_buffer(self, event_dict: dict, event_date: str, msg) -> str | None:
+        """Append event to buffer; flushes automatically on date change or when buffer reaches 100 messages."""
         self._last_msg = msg
         if event_date != self.current_date:
             key = self.flush(self.current_date) if self.current_date else None

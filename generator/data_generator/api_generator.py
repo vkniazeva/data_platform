@@ -6,12 +6,14 @@ from generator.reference import BARGES, METALS, WAREHOUSES
 
 
 def _select_random_keys(elements: dict, min_items: int = 1) -> list[str]:
+    """Return a random subset of keys from a dict with at least min_items entries."""
     keys = list(elements)
     number_of_items = random.randint(min_items, len(keys))
     return random.sample(keys, number_of_items)
 
 
 def _generate_stock(location_type: str) -> tuple[list[dict], list[dict]]:
+    """Generate random available and reserved stock lists per metal for a location type."""
     available_stock = []
     reserved_stock = []
 
@@ -42,6 +44,7 @@ def _generate_stock(location_type: str) -> tuple[list[dict], list[dict]]:
 
 
 def _generate_stock_request_body(key: str) -> dict:
+    """Build the request body for an inventory snapshot with random locations and stock."""
     location_type = random.choice(["warehouse", "barge"])
 
     locations = (
@@ -73,6 +76,7 @@ def _generate_stock_request_body(key: str) -> dict:
 
 
 def generate_stock_request(request_number: int) -> dict:
+    """Build a complete inventory snapshot request with idempotency key and headers."""
     date = datetime.now(timezone.utc).strftime("%Y%m%d")
     key = f"inv-{date}-{request_number:06d}"
 

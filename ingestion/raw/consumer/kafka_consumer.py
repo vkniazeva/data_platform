@@ -25,6 +25,7 @@ class KafkaConsumer:
         })
 
     def consume_messages(self, stop_event):
+        """Poll Kafka and yield validated messages until stop_event is set."""
         while not stop_event.is_set():
             msg = self._consumer.poll(timeout=1.0)
             if msg is None:
@@ -38,6 +39,7 @@ class KafkaConsumer:
             yield msg
 
     def _validate(self, msg) -> bool:
+        """Check schema_id header and validate message content; sends failures to DLQ."""
         schema_id = self._get_schema_id(msg)
 
         if schema_id is None:
@@ -61,6 +63,7 @@ class KafkaConsumer:
         return self._validate_content(msg, schema, schema_id)
 
     def _validate_content(self, msg, schema: dict, schema_id: str) -> bool:
+        """Validate message value against the JSON schema; sends violations to DLQ."""
         try:
             raw = msg.value().decode("utf-8")
             content = json.loads(raw) if schema.get("type") == "object" else raw
@@ -79,6 +82,7 @@ class KafkaConsumer:
         return True
 
     def _get_schema_id(self, msg) -> str | None:
+        """Extract the schema_id value from message headers, or None if absent."""
         if msg.headers() is None:
             return None
         for key, value in msg.headers():
@@ -87,14 +91,18 @@ class KafkaConsumer:
         return None
 
     def commit_message(self, msg):
+        """Commit the offset of this message to Kafka (manual at-least-once guarantee)."""
         self._consumer.commit(message=msg)
         logger.debug(f"Message has been successfully committed to a partition: {msg.partition()} with offset: {msg.offset()}")
 
     def _on_assign(self, consumer, partitions):
+        """Log partition assignments on consumer group rebalance."""
         logger.info(f"Assigned partitions: {[p.partition for p in partitions]}")
 
     def subscribe_topic(self):
+        """Subscribe to the configured topic with partition assignment callback."""
         self._consumer.subscribe(topics=[self.topic], on_assign=self._on_assign)
 
     def close_consumer(self):
+        """Close the Kafka consumer and release its resources."""
         self._consumer.close()

@@ -21,6 +21,7 @@ class HeaderValidator:
         }
 
     def validate(self, topic: str, headers: dict, kafka_key: str) -> ValidationResult:
+        """Validate idempotency key, event type, metal, and region from headers and Kafka key."""
         idempotency_key = headers.get("idempotency_key")
         if not idempotency_key:
             return ValidationResult(valid=False, reason="missing_header:idempotency_key")
