@@ -10,6 +10,12 @@ select
 	JSONExtractString(JSONExtractRaw(conditions, 'warehouse'), 'warehouse_id') as warehouse_id,
 	JSONExtractString(JSONExtractRaw(conditions, 'warehouse'), 'city') as warehouse_city,
 	source_file as source_file,
-	pipeline_version as pipeline_version
+	pipeline_version as pipeline_version,
+	_ingested_at,
+	_producer_id,
+	_parser_version,
+	_schema_id,
+	_kafka_offset,
+	_kafka_partition
 from bronze.regional_events
 qualify row_number() over (partition by execution_id order by event_timestamp desc) = 1

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-
+PARSER_VERSION = "1.0.0"
 def parse_fix_event(event: bytes) -> dict:
     """
     event value example:

@@ -129,6 +129,17 @@ curl -X POST "http://localhost:8123/" -u "default:clickhouse" --data "TRUNCATE T
 dbt run
 ```
 
+**What happens to lineage during replay:**
+
+Replay re-processes Parquet files that already exist in S3 — the raw data doesn't change, but `_ingested_at` will be a fresh timestamp (the replay run time). The evidence bundle tells the full story:
+
+- `_ingested_at` — changes on replay: reflects when this specific pipeline run loaded the row
+- `_kafka_offset` + `_kafka_partition` — unchanged: always point to the original Kafka message
+- `_schema_id` + `_parser_version` — reflect what was used during the pipeline run that produced the Parquet file (not the replay)
+- `source_file` — unchanged: same S3 path, making it easy to detect replayed rows vs original loads
+
+This means if a parser bug is fixed (bumping `_parser_version`), a replay of the Kafka topic (not Parquet) will stamp new `_parser_version` on affected rows, while a replay from existing Parquet files will carry the old version. The `events_lineage` gold model will surface this immediately as mixed `parser_versions` within a day.
+
 **Production compaction:** run as a cron job at 00:05 UTC daily (5 minutes after midnight to let any late-arriving events land):
 ```bash
 5 0 * * * cd /app && python -m ingestion.compaction
@@ -144,7 +155,20 @@ The pipeline commits Kafka offsets only after data has been written to both S3 a
 
 ### Data lineage
 
-Every row in every layer carries `source_file` (S3 path of the Parquet file it came from) and `pipeline_version`. This makes it possible to trace any row back to its origin and understand which pipeline version produced it.
+Every row in every layer carries a full evidence bundle — metadata written at ingestion time and preserved unchanged through bronze → silver → gold:
+
+| Column | Description |
+|--------|-------------|
+| `_ingested_at` | UTC timestamp when the message was processed by the pipeline |
+| `_producer_id` | Logical source of the data (`fix_generator_v1`, `regional_generator_v1`, …) — set in pipeline config, not per-message |
+| `_parser_version` | Version of the parser module that processed the message |
+| `_schema_id` | Schema ID from the Kafka `schema_id` header, validated against Schema Registry |
+| `_kafka_offset` | Kafka offset of the original message — allows tracing back to the exact message in the topic |
+| `_kafka_partition` | Kafka partition the message came from |
+| `source_file` | S3 path of the Parquet file the row was loaded from |
+| `pipeline_version` | Version of the bronze loader that inserted the row |
+
+The gold model `events_lineage` aggregates `producers`, `parser_versions`, and `schema_ids` per source table per day — making it immediately visible if an aggregated result was built from data produced by mixed pipeline versions.
 
 ## Ingestion pipeline
 
@@ -214,7 +238,7 @@ DLQ messages carry a `dlq_reason` header for inspection:
 
 Transformations are managed with **dbt** in `transforms/`. Three layers:
 
-**Bronze** — raw data as-is from Parquet. No casting, no renaming. Lineage columns `source_file` and `pipeline_version` added at load time.
+**Bronze** — raw data as-is from Parquet. No casting, no renaming. All values stored as strings. Evidence bundle columns (`_ingested_at`, `_producer_id`, `_parser_version`, `_schema_id`, `_kafka_offset`, `_kafka_partition`, `source_file`, `pipeline_version`) written at ingestion time and carried through unchanged.
 
 **Silver** — typed, renamed, deduplicated. FIX protocol tags mapped to human-readable names. Timestamps parsed from FIX format (`YYYYMMDD-HH:MM:SS.mmm`). Deduplication via `QUALIFY ROW_NUMBER()` on natural key.
 
@@ -227,7 +251,7 @@ Transformations are managed with **dbt** in `transforms/`. Three layers:
 | `regional_events_daily_summary` | Daily regional aggregates per instrument, region, warehouse |
 | `regional_events_hourly` | Hourly regional aggregates with time-of-day bucket |
 | `fix_region_prices_daily` | Global FIX price vs regional price with spread |
-| `events_lineage` | Source Parquet files per date and table for lineage tracking |
+| `events_lineage` | Per date and source table: Parquet files, producers, parser versions, schema IDs — detects mixed-version data |
 
 ### conditions field versioning
 
@@ -380,6 +404,7 @@ make down
 - [x] Data lineage diagram (PlantUML, auto-generated from dbt manifest)
 - [x] Two-level validation — schema + header rules (DLQ) + content rules (quarantine + DLQ)
 - [x] Error injection in generator (~5% corrupt messages for end-to-end validation testing)
+- [x] Evidence bundle — full data lineage per row: ingestion timestamp, producer, parser version, schema ID, Kafka offset/partition
 - [ ] Spark and Iceberg experiments
 - [ ] API data processing
 - [ ] Superset dashboards

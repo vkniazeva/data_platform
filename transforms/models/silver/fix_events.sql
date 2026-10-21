@@ -8,6 +8,12 @@ select
 	parseDateTime(substring("52", 1, 17), '%Y%m%d-%H:%i:%S', 'UTC') as event_timestamp,
 	parseDateTime(substring("60", 1, 17), '%Y%m%d-%H:%i:%S', 'UTC') as trade_timestamp,
 	source_file,
-	pipeline_version
+	pipeline_version,
+	_ingested_at,
+	_producer_id,
+	_parser_version,
+	_schema_id,
+	_kafka_offset,
+	_kafka_partition
 from bronze.fix_events
 qualify row_number() over (partition by "17" order by "34" desc) = 1

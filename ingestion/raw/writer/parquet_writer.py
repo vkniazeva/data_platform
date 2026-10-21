@@ -1,3 +1,4 @@
+import json
 import os
 import time
 
@@ -35,9 +36,20 @@ class ParquetWriter:
         if not self._buffer:
             return None
 
-        keys = self._buffer[0].keys()
-        transposed = {key: [row[key] for row in self._buffer] for key in keys}
-        table = pa.Table.from_pydict(transposed)
+        all_keys = set().union(*(row.keys() for row in self._buffer))
+        def _to_str(v):
+            if v is None:
+                return None
+            if isinstance(v, (dict, list)):
+                return json.dumps(v)
+            return str(v)
+
+        transposed = {
+            key: [_to_str(row.get(key)) for row in self._buffer]
+            for key in all_keys
+        }
+        schema = pa.schema([(k, pa.string()) for k in all_keys])
+        table = pa.Table.from_pydict(transposed, schema=schema)
 
         buffer = io.BytesIO()
         pq.write_table(table, buffer)

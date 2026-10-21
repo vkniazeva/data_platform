@@ -18,7 +18,11 @@ class BronzeLoader:
         response = self.s3_client.get_object(Bucket="raw-events", Key=s3_path)
         body = response["Body"].read()
         buffer = io.BytesIO(body)
-        table = pq.read_table(buffer)
+        try:
+            table = pq.read_table(buffer)
+        except Exception as e:
+            logger.warning(f"Skipping corrupted file {s3_path}: {e}")
+            return
         table = table.append_column("source_file", pa.array([s3_path] * len(table)))
         table = table.append_column("pipeline_version", pa.array(["1.0"] * len(table)))
         t_1 = time.monotonic()
@@ -35,10 +39,11 @@ class BronzeLoader:
         response = self.s3_client.get_object(Bucket="raw-events", Key=s3_path)
         body = response["Body"].read()
         buffer = io.BytesIO(body)
-        table = pq.read_table(buffer)
-
-        conditions_col = [json.dumps(row.as_py()) if row.is_valid else "{}" for row in table["conditions"]]
-        table = table.set_column(table.schema.get_field_index("conditions"), "conditions", pa.array(conditions_col))
+        try:
+            table = pq.read_table(buffer)
+        except Exception as e:
+            logger.warning(f"Skipping corrupted file {s3_path}: {e}")
+            return
         table = table.append_column("source_file", pa.array([s3_path] * len(table)))
         table = table.append_column("pipeline_version", pa.array(["1.0"] * len(table)))
         t_1 = time.monotonic()

@@ -5,9 +5,10 @@ import time
 from dotenv import load_dotenv
 
 from ingestion.raw.consumer import KafkaConsumer
-from ingestion.raw.parser.fix_parser import parse_fix_event, return_fix_event_date
-from ingestion.raw.parser.regional_parser import return_regional_event_date, parse_regional_event
+from ingestion.raw.parser.fix_parser import parse_fix_event, return_fix_event_date, PARSER_VERSION as FIX_PARSER_VERSION
+from ingestion.raw.parser.regional_parser import return_regional_event_date, parse_regional_event, PARSER_VERSION as REGIONAL_PARSER_VERSION
 from ingestion.raw.writer import ParquetWriter
+from ingestion.raw.lineage import build_lineage
 
 import logging
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ def worker_fix():
 
     while not stop_event.is_set():
         try:
-            create_worker(topic, group_id, parse_fix_event, return_fix_event_date)
+            create_worker(topic, group_id, parse_fix_event, return_fix_event_date, FIX_PARSER_VERSION, "fix_generator_v1")
         except Exception as e:
             logger.error(f"Worker {topic} crashed: {e}", exc_info=True)
             logger.info(f"Restarting worker {topic} in 5 seconds")
@@ -34,13 +35,13 @@ def worker_regional():
 
     while not stop_event.is_set():
         try:
-            create_worker(topic, group_id, parse_regional_event ,return_regional_event_date)
+            create_worker(topic, group_id, parse_regional_event, return_regional_event_date, REGIONAL_PARSER_VERSION, "regional_generator_v1")
         except Exception as e:
             logger.error(f"Worker {topic} crashed: {e}", exc_info=True)
             logger.info(f"Restarting worker {topic} in 5 seconds")
             time.sleep(5)
 
-def create_worker(topic: str, group_id: str, parser, date_parser) -> None:
+def create_worker(topic: str, group_id: str, parser, date_parser, parser_version: str, producer_id: str) -> None:
     bootstrap_servers = "localhost:19092"
 
     kafka_consumer = KafkaConsumer(topic=topic, group_id=group_id, bootstrap_servers=bootstrap_servers)
@@ -59,6 +60,7 @@ def create_worker(topic: str, group_id: str, parser, date_parser) -> None:
             event = parser(msg.value())
             elapsed = time.monotonic() - t0
             logger.debug(f"Message parsed in {elapsed * 1000:.1f} ms")
+            event.update(build_lineage(msg, parser_version, producer_id))
             event_date = date_parser(event)
             flushed = writer.write_to_buffer(event, event_date, msg)
             logger.debug('writing to buffer')
