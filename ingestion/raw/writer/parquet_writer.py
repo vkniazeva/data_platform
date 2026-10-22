@@ -15,6 +15,12 @@ load_dotenv()
 import logging
 logger = logging.getLogger(__name__)
 
+try:
+    from ingestion.metrics import s3_write_duration, s3_batch_size
+    _metrics_enabled = True
+except ImportError:
+    _metrics_enabled = False
+
 class ParquetWriter:
     def __init__(self, topic):
         self.bucket = os.getenv("BUCKET_NAME")
@@ -32,7 +38,7 @@ class ParquetWriter:
         )
 
 
-    def flush(self, event_date: str) -> str | None:
+    def flush(self, event_date: str, reason: str = "buffer_full") -> str | None:
         """Serialize the buffer to Parquet and upload to S3; returns the S3 key or None if buffer was empty."""
         if not self._buffer:
             return None
@@ -79,6 +85,9 @@ class ParquetWriter:
         count = len(self._buffer)
         size_kb = buffer.tell() / 1024
         logger.info(f"S3 write: {count} messages, {size_kb:.1f} KB → {s3_key} in {elapsed * 1000:.1f} ms")
+        if _metrics_enabled:
+            s3_write_duration.labels(topic=self.topic).observe(elapsed)
+            s3_batch_size.labels(topic=self.topic, reason=reason).observe(count)
         self._buffer = []
         return s3_key
 
@@ -88,7 +97,7 @@ class ParquetWriter:
         """Append event to buffer; flushes automatically on date change or when buffer reaches 100 messages."""
         self._last_msg = msg
         if event_date != self.current_date:
-            key = self.flush(self.current_date) if self.current_date else None
+            key = self.flush(self.current_date, reason="date_change") if self.current_date else None
             self.current_date = event_date
             self._buffer.append(event_dict)
             return key

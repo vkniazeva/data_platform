@@ -9,6 +9,9 @@ import clickhouse_connect
 from dotenv import load_dotenv
 
 from config import TOPIC_FIX_RAW, TOPIC_EVENTS, GROUP_FIX, GROUP_EVENTS
+from ingestion.metrics import (
+    messages_total, message_lag_seconds, worker_restarts_total, start_metrics_server
+)
 from ingestion.loader.bronze_loader import BronzeLoader
 from ingestion.raw.consumer import KafkaConsumer
 from ingestion.raw.dlq_producer import DlqProducer
@@ -101,11 +104,16 @@ def run_worker(topic: str, group_id: str, parser, date_parser, loader_method: st
 
     for msg in kafka_consumer.consume_messages(stop_event):
         try:
+            messages_total.labels(topic=topic, stage='read').inc()
+            _, kafka_ts_ms = msg.timestamp()
+            message_lag_seconds.labels(topic=topic).observe(time.time() - kafka_ts_ms / 1000.0)
+
             headers = {k: v.decode("utf-8") for k, v in (msg.headers() or [])}
             kafka_key = msg.key().decode("utf-8") if msg.key() else ""
             result = header_validator.validate(topic, headers, kafka_key)
             if not result.valid:
                 logger.warning(f"[{topic}] Header validation failed: {result.reason} — sending to DLQ")
+                messages_total.labels(topic=topic, stage='dlq').inc()
                 dlq_producer.send(msg, reason=result.reason)
                 continue
 
@@ -115,6 +123,8 @@ def run_worker(topic: str, group_id: str, parser, date_parser, loader_method: st
             content_result = content_validator.validate(topic, event)
             if not content_result.valid:
                 logger.warning(f"[{topic}] Content validation failed: {content_result.reason} — quarantine + DLQ")
+                messages_total.labels(topic=topic, stage='quarantine').inc()
+                messages_total.labels(topic=topic, stage='dlq').inc()
                 quarantine_writer.write(event, event_date, content_result.reason, msg)
                 dlq_producer.send(msg, reason=f"invalid_content:{content_result.reason}")
                 continue
@@ -123,6 +133,7 @@ def run_worker(topic: str, group_id: str, parser, date_parser, loader_method: st
             if flushed_key:
                 load(flushed_key)
                 kafka_consumer.commit_message(writer._last_msg)
+                messages_total.labels(topic=topic, stage='written').inc()
             msg_count += 1
             if msg_count % 100 == 0:
                 elapsed = time.monotonic() - t_start
@@ -133,7 +144,7 @@ def run_worker(topic: str, group_id: str, parser, date_parser, loader_method: st
             logger.error(f"[{topic}] Error processing message: {e}", exc_info=True)
 
     quarantine_writer.flush_remaining()
-    final_key = writer.flush(writer.current_date)
+    final_key = writer.flush(writer.current_date, reason="shutdown")
     if final_key:
         load(final_key)
         kafka_consumer.commit_message(writer._last_msg)
@@ -148,6 +159,7 @@ def worker(config: dict) -> None:
         except Exception as e:
             logger.error(f"[{config['topic']}] Worker crashed: {e}", exc_info=True)
             logger.info(f"[{config['topic']}] Restarting in 5 seconds")
+            worker_restarts_total.labels(topic=config['topic']).inc()
             time.sleep(5)
 
 
@@ -173,6 +185,7 @@ def dbt_executor():
 def main():
     """Start worker threads (one per topic) and dbt executor as daemon threads."""
     logging.basicConfig(level=logging.INFO)
+    start_metrics_server()
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
     threads = [threading.Thread(target=worker, daemon=True, args=(cfg,)) for cfg in WORKERS]

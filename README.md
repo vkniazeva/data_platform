@@ -274,6 +274,35 @@ The intended production shape is a list of objects (multiple warehouses per even
 - Drop v1 branch from silver once all bronze data is v2
 - Replay from bronze to reconstruct silver fully
 
+## Observability
+
+The pipeline exposes Prometheus metrics and ships a pre-built Grafana dashboard.
+
+**Services (started via `make up`):**
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Pipeline metrics (raw) | `localhost:8000/metrics` | — |
+| Prometheus | `localhost:9090` | — |
+| Grafana — Data Pipeline dashboard | `localhost:3000` | admin / admin |
+| Redpanda Console | `localhost:8080` | — |
+
+Prometheus scrapes two targets: the pipeline itself on `:8000` and Redpanda's built-in `/metrics` on `:9644` (consumer lag).
+
+**Metrics exposed (`ingestion/metrics.py`):**
+
+| Metric | Labels | What it measures |
+|--------|--------|-----------------|
+| `pipeline_messages_total` | `topic`, `stage` | Message count by stage: `read / written / dlq / quarantine` |
+| `pipeline_dlq_messages_total` | `topic`, `reason` | DLQ routing by reason: `invalid_header / missing_header / schema_validation_error / invalid_content` |
+| `pipeline_s3_write_duration_seconds` | `topic` | S3 write latency per batch (histogram) |
+| `pipeline_s3_batch_size` | `topic`, `reason` | Batch size at flush: `buffer_full / date_change / shutdown` |
+| `pipeline_ch_insert_duration_seconds` | `topic` | ClickHouse insert latency per batch (histogram) |
+| `pipeline_message_lag_seconds` | `topic` | End-to-end lag: Kafka message timestamp → processed |
+| `pipeline_worker_restarts_total` | `topic` | Worker thread crash/restart count |
+
+**Grafana dashboard** (`monitoring/grafana/dashboards/pipeline.json`) — 8 panels: messages/sec, DLQ rate, S3 latency p50/p95, CH latency p50/p95, end-to-end lag p50/p95, Kafka consumer lag (from Redpanda), batch size distribution, worker restarts.
+
 ## Performance
 
 Measured on a laptop (Apple M-series, Docker).
@@ -329,9 +358,11 @@ make compact DATE=2026-10-08
 cd transforms && dbt run
 ```
 
-**6. Check Redpanda Console**
+**6. Check monitoring**
 
-Open http://localhost:8080
+- Redpanda Console: http://localhost:8080
+- Prometheus targets: http://localhost:9090/targets
+- Grafana dashboard: http://localhost:3000 (admin / admin)
 
 **7. Verify data in object storage**
 ```bash

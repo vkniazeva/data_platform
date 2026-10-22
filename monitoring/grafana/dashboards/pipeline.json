@@ -1,0 +1,131 @@
+{
+  "title": "Data Pipeline",
+  "uid": "data-pipeline",
+  "schemaVersion": 38,
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Messages/sec by stage",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(pipeline_messages_total[1m])",
+          "legendFormat": "{{topic}} / {{stage}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "DLQ rate by reason",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(pipeline_dlq_messages_total[1m])",
+          "legendFormat": "{{topic}} / {{reason}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "S3 write latency (p50 / p95)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(pipeline_s3_write_duration_seconds_bucket[5m]))",
+          "legendFormat": "{{topic}} p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(pipeline_s3_write_duration_seconds_bucket[5m]))",
+          "legendFormat": "{{topic}} p95"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "id": 4,
+      "title": "ClickHouse insert latency (p50 / p95)",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 8, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(pipeline_ch_insert_duration_seconds_bucket[5m]))",
+          "legendFormat": "{{topic}} p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(pipeline_ch_insert_duration_seconds_bucket[5m]))",
+          "legendFormat": "{{topic}} p95"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "id": 5,
+      "title": "End-to-end lag (p50 / p95)",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 8, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(pipeline_message_lag_seconds_bucket[5m]))",
+          "legendFormat": "{{topic}} p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(pipeline_message_lag_seconds_bucket[5m]))",
+          "legendFormat": "{{topic}} p95"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "id": 6,
+      "title": "Kafka consumer lag",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (group, topic) (redpanda_kafka_consumer_group_lag)",
+          "legendFormat": "{{group}} / {{topic}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Flush batch size by reason",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 16, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(pipeline_s3_batch_size_bucket[5m]))",
+          "legendFormat": "{{topic}} / {{reason}} p50"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Worker restarts",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 16, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (topic) (pipeline_worker_restarts_total)",
+          "legendFormat": "{{topic}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "value": 0, "color": "green" },
+              { "value": 1, "color": "yellow" },
+              { "value": 5, "color": "red" }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

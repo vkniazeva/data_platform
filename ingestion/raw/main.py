@@ -78,7 +78,7 @@ def create_worker(topic: str, group_id: str, parser, date_parser, parser_version
         except Exception as e:
             logger.error(f"Error processing message: {e}", exc_info=True)
 
-    if writer.flush(writer.current_date):
+    if writer.flush(writer.current_date, reason="shutdown"):
         kafka_consumer.commit_message(writer._last_msg)
     kafka_consumer.close_consumer()
 

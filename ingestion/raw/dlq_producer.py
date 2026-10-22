@@ -3,6 +3,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+try:
+    from ingestion.metrics import dlq_messages_total
+    _metrics_enabled = True
+except ImportError:
+    _metrics_enabled = False
+
 
 class DlqProducer:
     def __init__(self, bootstrap_servers: str):
@@ -22,4 +28,6 @@ class DlqProducer:
             headers=headers,
         )
         self._producer.poll(0)
+        if _metrics_enabled:
+            dlq_messages_total.labels(topic=msg.topic(), reason=reason.split(":")[0]).inc()
         logger.warning(f"Message sent to DLQ {dlq_topic}: {reason}")

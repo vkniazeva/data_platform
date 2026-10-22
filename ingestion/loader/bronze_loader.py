@@ -8,6 +8,12 @@ import json
 import logging
 logger = logging.getLogger(__name__)
 
+try:
+    from ingestion.metrics import ch_insert_duration
+    _metrics_enabled = True
+except ImportError:
+    _metrics_enabled = False
+
 class BronzeLoader:
     def __init__(self, s3_client, ch_client):
         self.s3_client = s3_client
@@ -31,6 +37,8 @@ class BronzeLoader:
         t_2 = time.monotonic()
         t_total = t_2 - t_0
         t_insert = t_2 - t_1
+        if _metrics_enabled:
+            ch_insert_duration.labels(topic=s3_path.split('/')[0]).observe(t_insert)
         logger.info(f"{len(table)} of records from {s3_path} are stored in the bronze.fix_events table")
         logger.info(f"Raw data processing time: {t_total * 1000:.1f} ms")
         logger.info(f"Raw data insert time: {t_insert * 1000:.1f} ms")
@@ -53,6 +61,8 @@ class BronzeLoader:
         t_2 = time.monotonic()
         t_total = t_2 - t_0
         t_insert = t_2 - t_1
+        if _metrics_enabled:
+            ch_insert_duration.labels(topic=s3_path.split('/')[0]).observe(t_insert)
         logger.info(f"{len(table)} of records from {s3_path} are stored in the bronze.regional_events table")
         logger.info(f"Raw data processing time: {t_total * 1000:.1f} ms")
         logger.info(f"Raw data insert time: {t_insert * 1000:.1f} ms")
