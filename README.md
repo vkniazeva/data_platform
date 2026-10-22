@@ -303,6 +303,8 @@ Prometheus scrapes two targets: the pipeline itself on `:8000` and Redpanda's bu
 
 **Grafana dashboard** (`monitoring/grafana/dashboards/pipeline.json`) — 8 panels: messages/sec, DLQ rate, S3 latency p50/p95, CH latency p50/p95, end-to-end lag p50/p95, Kafka consumer lag (from Redpanda), batch size distribution, worker restarts.
 
+![grafana.png](docs/grafana_monitoring.png)
+
 ## Performance
 
 Measured on a laptop (Apple M-series, Docker).
